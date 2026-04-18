@@ -1,0 +1,57 @@
+[
+  {
+    "commonName": "Largemouth Bass",
+    "scientificName": "Micropterus salmoides",
+    "description": "The textbook predator of warm, weedy, muddy-bottomed ponds. Greenish body with a dark horizontal stripe; upper jaw extends past the eye. Ambush feeder around lily pads, submerged wood, and weed edges."
+  },
+  {
+    "commonName": "Smallmouth Bass",
+    "scientificName": "Micropterus dolomieu",
+    "description": "Prefers cooler, clearer, rockier water than its largemouth cousin. Bronze-brown body with faint vertical bars and often a reddish eye. Upper jaw ends at the eye. A stretch species here — possible but less likely."
+  },
+  {
+    "commonName": "Bluegill",
+    "scientificName": "Lepomis macrochirus",
+    "description": "The classic panfish. Dark blue-black ear flap, orange-yellow belly in breeding males. Abundant in warm shallows and near structure; takes worms, crickets, and tiny poppers readily."
+  },
+  {
+    "commonName": "Pumpkinseed Sunfish",
+    "scientificName": "Lepomis gibbosus",
+    "description": "Brilliantly colored sunfish with orange-red spot on the ear flap and wavy blue lines on the cheek. Sticks close to weedy shorelines and quiet coves."
+  },
+  {
+    "commonName": "Yellow Perch",
+    "scientificName": "Perca flavescens",
+    "description": "Golden-yellow body with 6–8 dark vertical bars. Schooling fish often found near drop-offs and submerged weeds. A reliable bite on small minnows and jigs."
+  },
+  {
+    "commonName": "Brown Bullhead Catfish",
+    "scientificName": "Ameiurus nebulosus",
+    "description": "Scaleless mud-dweller with long whiskers (barbels) and a rounded tail. Yellow-brown mottled body. Bottom-feeder most active at dusk and after dark."
+  },
+  {
+    "commonName": "Rock Bass",
+    "scientificName": "Ambloplites rupestris",
+    "description": "Chunky panfish of rocky structure, with red eyes and a dark spot on each scale forming rows of dots. Aggressive bite on crayfish imitations and small jigs around boulders."
+  },
+  {
+    "commonName": "Chain Pickerel",
+    "scientificName": "Esox niger",
+    "description": "Sleek torpedo-shaped ambush predator with a golden body and distinctive dark chain-link pattern. Haunts weedy shorelines, lily pads, and submerged wood. Sharp teeth — use a leader."
+  },
+  {
+    "commonName": "Black Crappie",
+    "scientificName": "Pomoxis nigromaculatus",
+    "description": "Silvery-black speckled panfish that schools around submerged wood in 10–12 ft holes. Light bite on small minnows and marabou jigs, best at dawn and dusk."
+  },
+  {
+    "commonName": "Golden Shiner",
+    "scientificName": "Notemigonus crysoleucas",
+    "description": "Slender minnow with a golden-olive back and silver-yellow sides. The primary baitfish in warm ponds — essentially guaranteed where bass and pickerel feed well."
+  },
+  {
+    "commonName": "Common Carp",
+    "scientificName": "Cyprinus carpio",
+    "description": "Large, heavy-bodied bottom-rooter with coppery-gold scales and two pairs of barbels. Rolls and splashes in shallows — you'll know if they're here. Sensitive fighter on corn or doughbait."
+  }
+]
