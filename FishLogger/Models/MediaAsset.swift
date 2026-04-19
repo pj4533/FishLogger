@@ -7,14 +7,17 @@ final class MediaAsset {
     var relativePath: String
     var kindRaw: String
     var createdAt: Date
+    /// Seconds into the video to use for the thumbnail. Ignored for photos.
+    var thumbnailTimeSeconds: Double = 0.5
 
     var owner: Catch?
 
-    init(relativePath: String, kind: MediaKind, createdAt: Date = .now) {
+    init(relativePath: String, kind: MediaKind, createdAt: Date = .now, thumbnailTimeSeconds: Double = 0.5) {
         self.id = UUID()
         self.relativePath = relativePath
         self.kindRaw = kind.rawValue
         self.createdAt = createdAt
+        self.thumbnailTimeSeconds = thumbnailTimeSeconds
     }
 
     var kind: MediaKind {

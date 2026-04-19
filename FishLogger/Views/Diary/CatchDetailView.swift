@@ -9,6 +9,7 @@ struct CatchDetailView: View {
 
     @Query(sort: \Species.sortOrder) private var allSpecies: [Species]
     @State private var isEditing = false
+    @State private var thumbnailPickerAsset: MediaAsset?
 
     private var anglerSuggestions: [String] {
         AutocompleteService.suggestions(for: .angler, context: context)
@@ -34,6 +35,9 @@ struct CatchDetailView: View {
                 VStack(spacing: 16) {
                     speciesBlock
                     statGrid
+                    if isEditing && !videoAssets.isEmpty {
+                        mediaBlock
+                    }
                     mapBlock
                     notesBlock
                     dangerBlock
@@ -51,6 +55,72 @@ struct CatchDetailView: View {
                     .foregroundStyle(Color.sunset)
             }
         }
+        .sheet(item: $thumbnailPickerAsset) { asset in
+            ThumbnailPickerView(
+                assetURL: asset.url,
+                initialSeconds: asset.thumbnailTimeSeconds
+            ) { chosen in
+                asset.thumbnailTimeSeconds = chosen
+                try? context.save()
+            }
+        }
+    }
+
+    private var videoAssets: [MediaAsset] {
+        entry.media.filter { $0.kind == .video }
+    }
+
+    private var mediaBlock: some View {
+        CozyCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("VIDEO THUMBNAILS")
+                    .font(.fieldLabel)
+                    .foregroundStyle(Color.inkFaded)
+                ForEach(Array(videoAssets.enumerated()), id: \.element.id) { index, asset in
+                    HStack(spacing: 12) {
+                        VideoThumbnailView(
+                            url: asset.url,
+                            atSeconds: asset.thumbnailTimeSeconds,
+                            iconSize: .caption,
+                            showPlayIcon: false
+                        )
+                        .frame(width: 72, height: 56)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.bark.opacity(0.5), lineWidth: 1.5)
+                        )
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Video \(index + 1)")
+                                .font(.cozyBody)
+                                .foregroundStyle(Color.ink)
+                            Text("Thumb at \(formatTimecode(asset.thumbnailTimeSeconds))")
+                                .font(.cozyCaption)
+                                .foregroundStyle(Color.inkFaded)
+                        }
+                        Spacer()
+                        Button {
+                            thumbnailPickerAsset = asset
+                        } label: {
+                            Label("Change", systemImage: "slider.horizontal.3")
+                                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Capsule().fill(Color.sunset))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func formatTimecode(_ seconds: Double) -> String {
+        guard seconds.isFinite else { return "0:00" }
+        let total = Int(seconds.rounded())
+        let m = total / 60
+        let s = total % 60
+        return String(format: "%d:%02d", m, s)
     }
 
     private var photoHero: some View {

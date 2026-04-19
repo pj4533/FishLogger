@@ -68,7 +68,7 @@ private struct DiaryRow: View {
                         .frame(width: 72, height: 72)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else if let video = entry.media.first(where: { $0.kind == .video }) {
-                    VideoThumbnailView(url: video.url)
+                    VideoThumbnailView(url: video.url, atSeconds: video.thumbnailTimeSeconds)
                         .frame(width: 72, height: 72)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else {
