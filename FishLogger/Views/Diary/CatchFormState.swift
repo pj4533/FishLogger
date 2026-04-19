@@ -16,6 +16,7 @@ final class CatchFormState {
     var isMeasured: Bool = true
     var baitUsed: String = ""
     var rodUsed: String = ""
+    var caughtBy: String = ""
     var notes: String = ""
 
     var isLocationRequesting: Bool = false
@@ -58,6 +59,7 @@ final class CatchFormState {
         isMeasured = true
         baitUsed = ""
         rodUsed = ""
+        caughtBy = ""
         notes = ""
         lastError = nil
         userEditedTimestamp = false
@@ -86,6 +88,7 @@ final class CatchFormState {
         if let m = parsed.isMeasured { isMeasured = m }
         if let b = parsed.bait, !b.isEmpty { baitUsed = b }
         if let r = parsed.rod, !r.isEmpty { rodUsed = r }
+        if let a = parsed.angler, !a.isEmpty { caughtBy = a }
         if let n = parsed.notes, !n.isEmpty { notes = n }
     }
 }

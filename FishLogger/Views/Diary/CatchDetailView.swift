@@ -10,6 +10,16 @@ struct CatchDetailView: View {
     @Query(sort: \Species.sortOrder) private var allSpecies: [Species]
     @State private var isEditing = false
 
+    private var anglerSuggestions: [String] {
+        AutocompleteService.suggestions(for: .angler, context: context)
+    }
+    private var baitSuggestions: [String] {
+        AutocompleteService.suggestions(for: .bait, context: context)
+    }
+    private var rodSuggestions: [String] {
+        AutocompleteService.suggestions(for: .rod, context: context)
+    }
+
     private var dateText: String {
         let f = DateFormatter()
         f.dateStyle = .long
@@ -135,13 +145,34 @@ struct CatchDetailView: View {
                         Label("Measured", systemImage: "ruler.fill").tag(true)
                     }
                     .pickerStyle(.segmented)
-                    TextField("Bait", text: $entry.baitUsed)
-                    TextField("Rod", text: $entry.rodUsed)
+
+                    Text("WHO").font(.fieldLabel).foregroundStyle(Color.inkFaded)
+                    AutocompleteField(
+                        label: "Who caught it?",
+                        text: $entry.caughtBy,
+                        suggestions: anglerSuggestions,
+                        icon: "person.fill"
+                    )
+                    Text("BAIT").font(.fieldLabel).foregroundStyle(Color.inkFaded)
+                    AutocompleteField(
+                        label: "Bait",
+                        text: $entry.baitUsed,
+                        suggestions: baitSuggestions,
+                        icon: "ladybug.fill"
+                    )
+                    Text("ROD").font(.fieldLabel).foregroundStyle(Color.inkFaded)
+                    AutocompleteField(
+                        label: "Rod",
+                        text: $entry.rodUsed,
+                        suggestions: rodSuggestions,
+                        icon: "fishingrod"
+                    )
                 } else {
                     HStack {
                         WeightBadge(weight: entry.weight, isMeasured: entry.isMeasured)
                         Spacer()
                     }
+                    StatRow(label: "WHO",  value: entry.caughtBy.isEmpty ? "—" : entry.caughtBy, icon: "person.fill")
                     StatRow(label: "BAIT", value: entry.baitUsed.isEmpty ? "—" : entry.baitUsed, icon: "ladybug.fill")
                     StatRow(label: "ROD",  value: entry.rodUsed.isEmpty  ? "—" : entry.rodUsed,  icon: "fishingrod")
                     if let spot = entry.spot {

@@ -12,6 +12,10 @@ struct SpeciesDetailView: View {
         mostCommon(species.catches.map { $0.baitUsed.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
     }
 
+    private var topAngler: String? {
+        mostCommon(species.catches.map { $0.caughtBy.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+    }
+
     private var mostCommonHour: Int? {
         let hours = species.catches.map { Calendar.current.component(.hour, from: $0.timestamp) }
         return mostCommon(hours)
@@ -58,6 +62,9 @@ struct SpeciesDetailView: View {
                         }
                         if let bait = mostUsedBait {
                             Stat(label: "Favorite bait", value: bait)
+                        }
+                        if let angler = topAngler {
+                            Stat(label: "Top angler", value: angler)
                         }
                         if let hour = mostCommonHour {
                             Stat(label: "Most active hour", value: formatHour(hour))

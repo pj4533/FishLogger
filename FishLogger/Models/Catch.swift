@@ -12,6 +12,7 @@ final class Catch {
     var isMeasured: Bool
     var baitUsed: String
     var rodUsed: String
+    var caughtBy: String = ""
     var notes: String
 
     var species: Species?
@@ -28,6 +29,7 @@ final class Catch {
         isMeasured: Bool = false,
         baitUsed: String = "",
         rodUsed: String = "",
+        caughtBy: String = "",
         notes: String = "",
         species: Species? = nil,
         spot: Spot? = nil
@@ -40,6 +42,7 @@ final class Catch {
         self.isMeasured = isMeasured
         self.baitUsed = baitUsed
         self.rodUsed = rodUsed
+        self.caughtBy = caughtBy
         self.notes = notes
         self.species = species
         self.spot = spot

@@ -21,6 +21,9 @@ struct AddCatchSheet: View {
     private var rodSuggestions: [String] {
         AutocompleteService.suggestions(for: .rod, context: context)
     }
+    private var anglerSuggestions: [String] {
+        AutocompleteService.suggestions(for: .angler, context: context)
+    }
 
     var body: some View {
         NavigationStack {
@@ -29,6 +32,7 @@ struct AddCatchSheet: View {
                     photoSection
                     speciesSection
                     whenSection
+                    whoSection
                     weightSection
                     baitSection
                     rodSection
@@ -162,6 +166,22 @@ struct AddCatchSheet: View {
                     }
                     .padding(.vertical, 4)
                 }
+            }
+        }
+    }
+
+    private var whoSection: some View {
+        CozyCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("WHO")
+                    .font(.fieldLabel)
+                    .foregroundStyle(Color.inkFaded)
+                AutocompleteField(
+                    label: "Who caught it?",
+                    text: $form.caughtBy,
+                    suggestions: anglerSuggestions,
+                    icon: "person.fill"
+                )
             }
         }
     }
@@ -350,6 +370,7 @@ struct AddCatchSheet: View {
             isMeasured: form.isMeasured,
             baitUsed: form.baitUsed.trimmingCharacters(in: .whitespacesAndNewlines),
             rodUsed: form.rodUsed.trimmingCharacters(in: .whitespacesAndNewlines),
+            caughtBy: form.caughtBy.trimmingCharacters(in: .whitespacesAndNewlines),
             notes: form.notes,
             species: species
         )

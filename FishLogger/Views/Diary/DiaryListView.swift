@@ -79,9 +79,17 @@ private struct DiaryRow: View {
                         SpeciesTag(commonName: s.commonName, scientificName: s.scientificName, compact: true)
                     }
                     WeightBadge(weight: entry.weight, isMeasured: entry.isMeasured)
-                    Text(dateText)
-                        .font(.fieldLabel)
-                        .foregroundStyle(Color.inkFaded)
+                    HStack(spacing: 8) {
+                        Text(dateText)
+                            .font(.fieldLabel)
+                            .foregroundStyle(Color.inkFaded)
+                        if !entry.caughtBy.isEmpty {
+                            Label(entry.caughtBy, systemImage: "person.fill")
+                                .labelStyle(.titleAndIcon)
+                                .font(.fieldLabel)
+                                .foregroundStyle(Color.inkFaded)
+                        }
+                    }
                 }
                 Spacer()
                 MiniMapThumb(coordinate: entry.coordinate)

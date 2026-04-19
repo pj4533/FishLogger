@@ -53,12 +53,19 @@ struct SpotDetailView: View {
                     ForEach(sortedCatches) { entry in
                         NavigationLink(value: entry) {
                             CozyCard {
-                                HStack {
-                                    if let s = entry.species {
-                                        SpeciesTag(commonName: s.commonName, scientificName: s.scientificName, compact: true)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        if let s = entry.species {
+                                            SpeciesTag(commonName: s.commonName, scientificName: s.scientificName, compact: true)
+                                        }
+                                        Spacer()
+                                        WeightBadge(weight: entry.weight, isMeasured: entry.isMeasured)
                                     }
-                                    Spacer()
-                                    WeightBadge(weight: entry.weight, isMeasured: entry.isMeasured)
+                                    if !entry.caughtBy.isEmpty {
+                                        Label(entry.caughtBy, systemImage: "person.fill")
+                                            .font(.fieldLabel)
+                                            .foregroundStyle(Color.inkFaded)
+                                    }
                                 }
                             }
                         }

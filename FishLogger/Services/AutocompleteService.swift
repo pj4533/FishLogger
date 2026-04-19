@@ -4,6 +4,7 @@ import SwiftData
 enum AutocompleteFieldKind {
     case bait
     case rod
+    case angler
 }
 
 enum AutocompleteService {
@@ -16,7 +17,12 @@ enum AutocompleteService {
         var seen = Set<String>()
         var ordered: [String] = []
         for c in catches {
-            let raw = field == .bait ? c.baitUsed : c.rodUsed
+            let raw: String
+            switch field {
+            case .bait:   raw = c.baitUsed
+            case .rod:    raw = c.rodUsed
+            case .angler: raw = c.caughtBy
+            }
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
             let key = trimmed.lowercased()

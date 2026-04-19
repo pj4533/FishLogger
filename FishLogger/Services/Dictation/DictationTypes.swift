@@ -9,6 +9,7 @@ struct DictationParseResult {
     var isMeasured: Bool?
     var bait: String?
     var rod: String?
+    var angler: String?
     var notes: String?
 }
 

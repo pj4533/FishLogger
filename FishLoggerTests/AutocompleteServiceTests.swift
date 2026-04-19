@@ -45,4 +45,22 @@ struct AutocompleteServiceTests {
         let filtered = AutocompleteService.filtered(all, matching: "spin")
         #expect(filtered == ["Spinnerbait", "Spin fly"])
     }
+
+    @Test
+    func anglerSuggestionsDedupAndOrderByRecency() throws {
+        let container = try TestContainer.make()
+        let context = container.mainContext
+
+        let c1 = Catch(latitude: 0, longitude: 0, caughtBy: "PJ")
+        c1.timestamp = Date(timeIntervalSince1970: 100)
+        let c2 = Catch(latitude: 0, longitude: 0, caughtBy: "pj")
+        c2.timestamp = Date(timeIntervalSince1970: 200)
+        let c3 = Catch(latitude: 0, longitude: 0, caughtBy: "Sam")
+        c3.timestamp = Date(timeIntervalSince1970: 300)
+        [c1, c2, c3].forEach(context.insert)
+
+        let suggestions = AutocompleteService.suggestions(for: .angler, context: context)
+        #expect(suggestions.count == 2)
+        #expect(suggestions.first == "Sam")
+    }
 }
