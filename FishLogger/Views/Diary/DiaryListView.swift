@@ -63,8 +63,12 @@ private struct DiaryRow: View {
     var body: some View {
         CozyCard {
             HStack(alignment: .top, spacing: 12) {
-                if let first = entry.media.first(where: { $0.kind == .photo }) {
-                    AsyncImageFromURL(url: first.url)
+                if let photo = entry.media.first(where: { $0.kind == .photo }) {
+                    AsyncImageFromURL(url: photo.url)
+                        .frame(width: 72, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else if let video = entry.media.first(where: { $0.kind == .video }) {
+                    VideoThumbnailView(url: video.url)
                         .frame(width: 72, height: 72)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else {

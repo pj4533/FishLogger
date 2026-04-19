@@ -55,11 +55,8 @@ struct CatchDetailView: View {
 
     private var photoHero: some View {
         Group {
-            if let first = entry.media.first(where: { $0.kind == .photo }) {
-                AsyncImageFromURL(url: first.url)
-                    .frame(height: 260)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
+            if !entry.media.isEmpty {
+                MediaCarousel(assets: sortedMedia, height: 280)
                     .overlay(alignment: .bottom) {
                         TornEdge()
                             .fill(Color.paper)
@@ -76,6 +73,15 @@ struct CatchDetailView: View {
                     TornEdge().fill(Color.paper).frame(height: 22)
                 }
             }
+        }
+    }
+
+    /// Photos first, then videos — puts stills up front so the gallery opens
+    /// on an image rather than a video that might not be ready to play yet.
+    private var sortedMedia: [MediaAsset] {
+        entry.media.sorted { a, b in
+            if a.kind == b.kind { return a.createdAt < b.createdAt }
+            return a.kind == .photo
         }
     }
 
