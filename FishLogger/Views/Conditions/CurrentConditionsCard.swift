@@ -35,6 +35,9 @@ struct CurrentConditionsCard: View {
                         Text(current.condition.description)
                             .font(.species)
                             .foregroundStyle(Color.ink)
+                        Text("Nearest station to \(snapshot.area.name) · regional reading")
+                            .font(.cozyCaption)
+                            .foregroundStyle(Color.inkFaded)
                     }
                     Spacer()
                     Image(systemName: current.symbolName)
@@ -74,27 +77,32 @@ struct CurrentConditionsCard: View {
     }
 
     private var pressureRow: some View {
-        HStack(spacing: 10) {
-            let trend = PressureTrend(current.pressureTrend)
-            Image(systemName: trend.symbolName)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(trendColor(trend))
-                .frame(width: 26)
+        VStack(alignment: .leading, spacing: 4) {
+            Text("PRESSURE")
+                .font(.fieldLabel)
+                .foregroundStyle(Color.inkFaded)
+            HStack(spacing: 10) {
+                let trend = PressureTrend(current.pressureTrend)
+                Image(systemName: trend.symbolName)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(trendColor(trend))
+                    .frame(width: 26)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(pressureDisplay)
-                        .font(.statValue.weight(.semibold))
-                        .foregroundStyle(Color.ink)
-                    Text("mb")
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(pressureDisplay)
+                            .font(.statValue.weight(.semibold))
+                            .foregroundStyle(Color.ink)
+                        Text("mb")
+                            .font(.cozyCaption)
+                            .foregroundStyle(Color.inkFaded)
+                    }
+                    Text(pressureSubtitle(trend: trend))
                         .font(.cozyCaption)
                         .foregroundStyle(Color.inkFaded)
                 }
-                Text(pressureSubtitle(trend: trend))
-                    .font(.cozyCaption)
-                    .foregroundStyle(Color.inkFaded)
+                Spacer()
             }
-            Spacer()
         }
     }
 

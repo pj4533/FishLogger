@@ -10,6 +10,7 @@ import WeatherKit
 struct BestFishingWindow {
     let interval: DateInterval
     let score: Double
+    /// Human-readable phrases describing why this window scored well.
     let rationale: [String]
 }
 
@@ -21,62 +22,89 @@ struct ScoredHour {
 
 enum ConditionsScorer {
 
+    /// Minimum summed 2-hour score before we surface a window. Keeps us from
+    /// promoting "the least bad slot" when nothing is actually signal-rich.
+    private static let surfaceThreshold: Double = 2.0
+
     static func bestWindow(
         hours: [HourWeather],
         dailyByDate: [Date: DayWeather],
         solunarByDate: [Date: Solunar],
         calendar: Calendar = .current
     ) -> BestFishingWindow? {
-        guard !hours.isEmpty else { return nil }
+        // Score only daylight hours — "best time to fish" by definition doesn't
+        // include pitch dark, and we don't want night to leak into the
+        // rationale of an otherwise valid morning window.
+        let scored: [ScoredHour] = hours.compactMap { hour in
+            score(
+                hour: hour,
+                dailyByDate: dailyByDate,
+                solunarByDate: solunarByDate,
+                calendar: calendar
+            )
+        }
 
-        let scored = hours.map { score(hour: $0, dailyByDate: dailyByDate, solunarByDate: solunarByDate, calendar: calendar) }
+        guard scored.count >= 2 else { return nil }
 
-        // Find the best 2-hour consecutive window.
-        var best: (index: Int, score: Double)? = nil
+        // Only evaluate pairs of truly consecutive hours (skip the gap across
+        // dusk → next dawn). If WeatherKit returns hours on the hour, gaps
+        // should be exactly 3600 s.
+        var best: (startIdx: Int, score: Double)? = nil
         for i in 0..<(scored.count - 1) {
+            let gap = scored[i + 1].date.timeIntervalSince(scored[i].date)
+            guard abs(gap - 3600) < 60 else { continue }
             let pair = scored[i].score + scored[i + 1].score
             if best == nil || pair > best!.score {
                 best = (i, pair)
             }
         }
 
-        guard let bestIdx = best?.index else { return nil }
+        guard
+            let bestIdx = best?.startIdx,
+            let bestScore = best?.score,
+            bestScore >= surfaceThreshold
+        else {
+            return nil
+        }
+
         let start = scored[bestIdx].date
         let end = scored[bestIdx + 1].date.addingTimeInterval(3600)
         let rationale = (scored[bestIdx].reasons + scored[bestIdx + 1].reasons).unique()
 
         return BestFishingWindow(
             interval: DateInterval(start: start, end: end),
-            score: best!.score,
+            score: bestScore,
             rationale: rationale
         )
     }
 
+    /// Returns a ScoredHour for a daylight hour, or nil if the hour falls
+    /// outside the daylight window ±30 minutes.
     static func score(
         hour: HourWeather,
         dailyByDate: [Date: DayWeather],
         solunarByDate: [Date: Solunar],
         calendar: Calendar = .current
-    ) -> ScoredHour {
+    ) -> ScoredHour? {
+        let solunar = findSolunar(for: hour.date, in: solunarByDate, calendar: calendar)
+        let daily = findDaily(for: hour.date, in: dailyByDate, calendar: calendar)
+        let sunrise = solunar?.sunrise ?? daily?.sun.sunrise
+        let sunset  = solunar?.sunset  ?? daily?.sun.sunset
+
+        // If we can't determine daylight bounds at all, assume daylight — the
+        // hour might still usefully contribute to a best window. This lets the
+        // feature degrade gracefully when WeatherKit / SunCalc don't agree on
+        // a day key.
+        if let sunrise, let sunset {
+            let daylightStart = sunrise.addingTimeInterval(-30 * 60)
+            let daylightEnd = sunset.addingTimeInterval(30 * 60)
+            guard hour.date >= daylightStart && hour.date <= daylightEnd else {
+                return nil
+            }
+        }
+
         var s: Double = 0
         var reasons: [String] = []
-
-        let day = calendar.startOfDay(for: hour.date)
-        let solunar = solunarByDate[day]
-
-        // Daylight gate — we only score daylight hours for "best window".
-        // Dawn/dusk already get their own bonus below.
-        let daily = dailyByDate[day]
-        let sunrise = solunar?.sunrise ?? daily?.sun.sunrise
-        let sunset = solunar?.sunset ?? daily?.sun.sunset
-        let isDaylight: Bool = {
-            guard let sunrise, let sunset else { return true }
-            return hour.date >= sunrise.addingTimeInterval(-30 * 60)
-                && hour.date <= sunset.addingTimeInterval(30 * 60)
-        }()
-        if !isDaylight {
-            return ScoredHour(date: hour.date, score: -5, reasons: ["night"])
-        }
 
         // Cloud cover — overcast extends feeding windows.
         if hour.cloudCover > 0.6 {
@@ -94,7 +122,7 @@ enum ConditionsScorer {
         default: break
         }
 
-        // Wind — surface chop helps, but above 25 km/h it's a problem.
+        // Wind — a little surface chop helps, but above 25 km/h it's a problem.
         let windKmh = hour.wind.speed.converted(to: .kilometersPerHour).value
         if windKmh > 25 {
             s -= 2
@@ -120,7 +148,7 @@ enum ConditionsScorer {
             }
         }
 
-        // Dawn / dusk bonus (±1h). Doubles when stacked with a solunar window.
+        // Dawn / dusk bonus (±1 h). Stacks with solunar if applicable.
         if let sunrise, abs(hour.date.timeIntervalSince(sunrise)) <= 3600 {
             s += 2
             reasons.append("dawn")
@@ -130,6 +158,30 @@ enum ConditionsScorer {
         }
 
         return ScoredHour(date: hour.date, score: s, reasons: reasons)
+    }
+
+    /// Forgiving lookup — try exact `startOfDay` key first, then fall back to
+    /// `isDate(_:inSameDayAs:)` scan so a mismatch between our day keys and
+    /// WeatherKit's `DayWeather.date` timezone handling doesn't drop the
+    /// lookup silently.
+    private static func findSolunar(
+        for date: Date,
+        in dict: [Date: Solunar],
+        calendar: Calendar
+    ) -> Solunar? {
+        let exact = calendar.startOfDay(for: date)
+        if let hit = dict[exact] { return hit }
+        return dict.first(where: { calendar.isDate($0.key, inSameDayAs: date) })?.value
+    }
+
+    private static func findDaily(
+        for date: Date,
+        in dict: [Date: DayWeather],
+        calendar: Calendar
+    ) -> DayWeather? {
+        let exact = calendar.startOfDay(for: date)
+        if let hit = dict[exact] { return hit }
+        return dict.first(where: { calendar.isDate($0.key, inSameDayAs: date) })?.value
     }
 }
 

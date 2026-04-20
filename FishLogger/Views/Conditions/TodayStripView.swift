@@ -14,7 +14,7 @@ struct TodayStripView: View {
         CozyCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("TODAY")
+                    Text("FISHING WINDOWS · TODAY")
                         .font(.fieldLabel)
                         .foregroundStyle(Color.inkFaded)
                     Spacer()
@@ -24,6 +24,11 @@ struct TodayStripView: View {
                             .foregroundStyle(Color.inkFaded)
                     }
                 }
+
+                Text("Prime feeding times based on the moon's position. Orange blocks are majors (~2 h), green are minors (~1 h).")
+                    .font(.cozyCaption)
+                    .foregroundStyle(Color.inkFaded)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {

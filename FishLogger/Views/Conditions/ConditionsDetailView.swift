@@ -91,6 +91,8 @@ struct ConditionsDetailView: View {
             TodayStripView(snapshot: snapshot)
             BestWindowBanner(snapshot: snapshot)
             WeekAheadSection(snapshot: snapshot)
+            AppleWeatherAttribution()
+                .padding(.top, 4)
         }
     }
 
@@ -118,12 +120,16 @@ struct ConditionsDetailView: View {
     private func buildSolunar(bundle: ForecastBundle, location: CLLocation) -> [Date: Solunar] {
         var byDay: [Date: Solunar] = [:]
         let cal = Calendar.current
+        // Pass *local noon* of the day to the solar math so the Julian-cycle
+        // rounding always lands on the correct local day. Keying the dict by
+        // `startOfDay` keeps lookups from `hour.date` clean.
         for day in bundle.daily {
             let dayKey = cal.startOfDay(for: day.date)
+            let localNoon = dayKey.addingTimeInterval(12 * 3600)
             byDay[dayKey] = SolunarCalculator.compute(
                 lat: location.coordinate.latitude,
                 lon: location.coordinate.longitude,
-                date: day.date
+                date: localNoon
             )
         }
         // Ensure "today" is covered even if WeatherKit daily doesn't include it.
@@ -132,9 +138,31 @@ struct ConditionsDetailView: View {
             byDay[today] = SolunarCalculator.compute(
                 lat: location.coordinate.latitude,
                 lon: location.coordinate.longitude,
-                date: .now
+                date: today.addingTimeInterval(12 * 3600)
             )
         }
         return byDay
+    }
+}
+
+/// Apple Weather requires visible attribution when WeatherKit data is shown.
+/// https://developer.apple.com/weatherkit/get-started/#attribution-requirements
+struct AppleWeatherAttribution: View {
+    private let legalURL = URL(string: "https://weatherkit.apple.com/legal-attribution.html")!
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Spacer()
+            Image(systemName: "apple.logo")
+                .font(.caption2)
+                .foregroundStyle(Color.inkFaded)
+            Text("Weather")
+                .font(.cozyCaption)
+                .foregroundStyle(Color.inkFaded)
+            Link("Other data sources", destination: legalURL)
+                .font(.cozyCaption)
+                .tint(Color.sunset)
+            Spacer()
+        }
     }
 }

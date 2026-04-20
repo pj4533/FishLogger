@@ -35,16 +35,17 @@ struct BestWindowBanner: View {
                         .frame(width: 28)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("BEST WINDOW")
+                        Text("BEST TIME TO FISH · NEXT 7 DAYS")
                             .font(.fieldLabel)
                             .foregroundStyle(Color.inkFaded)
                         Text(dateText(best.interval))
                             .font(.species)
                             .foregroundStyle(Color.ink)
                         if !best.rationale.isEmpty {
-                            Text(best.rationale.joined(separator: " · "))
+                            Text(displayRationale(best.rationale))
                                 .font(.cozyCaption)
                                 .foregroundStyle(Color.inkFaded)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     Spacer()
@@ -53,6 +54,16 @@ struct BestWindowBanner: View {
         } else {
             EmptyView()
         }
+    }
+
+    /// Join and capitalize the scorer's lowercase reason tags into a readable
+    /// fragment, e.g. "Overcast, falling pressure, solunar major."
+    private func displayRationale(_ reasons: [String]) -> String {
+        guard let first = reasons.first else { return "" }
+        let head = first.prefix(1).uppercased() + first.dropFirst()
+        let rest = reasons.dropFirst()
+        if rest.isEmpty { return head }
+        return head + ", " + rest.joined(separator: ", ")
     }
 
     private func dateText(_ interval: DateInterval) -> String {
