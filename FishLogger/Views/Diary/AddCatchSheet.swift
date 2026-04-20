@@ -389,6 +389,21 @@ struct AddCatchSheet: View {
         do {
             try context.save()
             showSavedRipple.toggle()
+            // Fire-and-forget conditions fetch for the new catch. Failures are
+            // recorded on the entry and retried next launch.
+            Task { @MainActor in
+                do {
+                    try await ConditionsBackfillService.shared.backfillOne(
+                        newCatch,
+                        weather: WeatherService.shared
+                    )
+                    try? context.save()
+                } catch {
+                    newCatch.conditionsFetchFailureCount += 1
+                    newCatch.conditionsFetchAttemptAt = .now
+                    try? context.save()
+                }
+            }
             dismiss()
         } catch {
             form.lastError = "Couldn't save: \(error.localizedDescription)"

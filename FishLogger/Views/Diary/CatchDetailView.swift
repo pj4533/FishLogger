@@ -38,6 +38,7 @@ struct CatchDetailView: View {
                     if isEditing && !videoAssets.isEmpty {
                         mediaBlock
                     }
+                    ConditionsAtCatchSection(entry: entry)
                     mapBlock
                     notesBlock
                     dangerBlock
