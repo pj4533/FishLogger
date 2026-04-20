@@ -33,13 +33,19 @@ struct AnglerLeaderGroup: Identifiable {
 
 struct LeaderboardView: View {
     @Query(sort: \Species.sortOrder) private var species: [Species]
-    @Query(sort: \Catch.weight, order: .reverse) private var catches: [Catch]
+    // Only measured weights are eligible — guesses would muddy the rankings.
+    @Query(
+        filter: #Predicate<Catch> { $0.isMeasured },
+        sort: \Catch.weight,
+        order: .reverse
+    ) private var catches: [Catch]
     @State private var mode: LeaderboardMode = .species
 
     private var speciesGroups: [SpeciesLeaderGroup] {
         species
             .compactMap { s -> SpeciesLeaderGroup? in
-                let top = Array(s.catches.sorted { $0.weight > $1.weight }.prefix(5))
+                let measured = s.catches.filter { $0.isMeasured }
+                let top = Array(measured.sorted { $0.weight > $1.weight }.prefix(5))
                 guard !top.isEmpty else { return nil }
                 return SpeciesLeaderGroup(species: s, top: top)
             }
