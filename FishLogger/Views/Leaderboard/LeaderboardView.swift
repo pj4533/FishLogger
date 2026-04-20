@@ -33,9 +33,10 @@ struct AnglerLeaderGroup: Identifiable {
 
 struct LeaderboardView: View {
     @Query(sort: \Species.sortOrder) private var species: [Species]
-    // Only measured weights are eligible — guesses would muddy the rankings.
+    // Only real, measured weights are eligible — guesses and "no weight
+    // entered" (which saves as 0) would both distort the rankings.
     @Query(
-        filter: #Predicate<Catch> { $0.isMeasured },
+        filter: #Predicate<Catch> { $0.isMeasured && $0.weight > 0 },
         sort: \Catch.weight,
         order: .reverse
     ) private var catches: [Catch]
@@ -44,8 +45,8 @@ struct LeaderboardView: View {
     private var speciesGroups: [SpeciesLeaderGroup] {
         species
             .compactMap { s -> SpeciesLeaderGroup? in
-                let measured = s.catches.filter { $0.isMeasured }
-                let top = Array(measured.sorted { $0.weight > $1.weight }.prefix(5))
+                let eligible = s.catches.filter { $0.isMeasured && $0.weight > 0 }
+                let top = Array(eligible.sorted { $0.weight > $1.weight }.prefix(5))
                 guard !top.isEmpty else { return nil }
                 return SpeciesLeaderGroup(species: s, top: top)
             }
