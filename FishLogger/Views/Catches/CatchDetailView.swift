@@ -28,17 +28,33 @@ struct CatchDetailView: View {
         return f.string(from: entry.timestamp)
     }
 
+    /// A catch was "during a solunar major/minor" if its timestamp falls
+    /// inside any of the parent session's solunar windows.
+    private var activeSolunarWindow: String? {
+        guard let session = entry.session else { return nil }
+        if session.solunarMajors.contains(where: { $0.contains(entry.timestamp) }) {
+            return "major"
+        }
+        if session.solunarMinors.contains(where: { $0.contains(entry.timestamp) }) {
+            return "minor"
+        }
+        return nil
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 photoHero
                 VStack(spacing: 16) {
+                    sessionLinkBlock
                     speciesBlock
                     statGrid
                     if isEditing && !videoAssets.isEmpty {
                         mediaBlock
                     }
-                    ConditionsAtCatchSection(entry: entry)
+                    if let window = activeSolunarWindow {
+                        solunarCatchBadge(window: window)
+                    }
                     mapBlock
                     notesBlock
                     dangerBlock
@@ -69,6 +85,46 @@ struct CatchDetailView: View {
 
     private var videoAssets: [MediaAsset] {
         entry.media.filter { $0.kind == .video }
+    }
+
+    @ViewBuilder
+    private var sessionLinkBlock: some View {
+        if let session = entry.session {
+            NavigationLink(value: session) {
+                CozyCard {
+                    HStack(spacing: 10) {
+                        Image(systemName: "book.closed.fill")
+                            .foregroundStyle(Color.sunset)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("FROM SESSION")
+                                .font(.fieldLabel)
+                                .foregroundStyle(Color.inkFaded)
+                            Text(session.spot?.name ?? "Session")
+                                .font(.cozyBody.weight(.semibold))
+                                .foregroundStyle(Color.ink)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(Color.inkFaded)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func solunarCatchBadge(window: String) -> some View {
+        CozyCard {
+            HStack(spacing: 8) {
+                Image(systemName: "star.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.sunset)
+                Text("Caught during a solunar \(window)")
+                    .font(.cozyBody.weight(.semibold))
+                    .foregroundStyle(Color.ink)
+                Spacer()
+            }
+        }
     }
 
     private var mediaBlock: some View {
@@ -361,5 +417,36 @@ struct TornEdge: Shape {
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         path.closeSubpath()
         return path
+    }
+}
+
+/// Loads an image from disk asynchronously. Previously in DiaryListView, now
+/// shared between SessionListView rows and any other catch-surface UI.
+struct AsyncImageFromURL: View {
+    let url: URL
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.waterLight.opacity(0.5)
+                    .overlay(ProgressView())
+            }
+        }
+        .task(id: url) {
+            image = await Self.load(url)
+        }
+    }
+
+    private static func load(_ url: URL) async -> UIImage? {
+        await Task.detached(priority: .utility) {
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return UIImage(data: data)
+        }.value
     }
 }

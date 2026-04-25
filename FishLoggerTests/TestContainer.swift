@@ -7,7 +7,7 @@ enum TestContainer {
     static func make() throws -> ModelContainer {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(
-            for: Catch.self, Species.self, Spot.self, MediaAsset.self,
+            for: Catch.self, Species.self, Spot.self, Session.self, MediaAsset.self,
             configurations: config
         )
     }

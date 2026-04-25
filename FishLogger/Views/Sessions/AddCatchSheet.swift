@@ -2,7 +2,11 @@ import SwiftUI
 import SwiftData
 import PhotosUI
 import MapKit
+import CoreLocation
 
+/// Log a catch independently of any session lifecycle. Catches auto-attach
+/// to whichever session covers their timestamp on save. Timestamp prefers
+/// photo EXIF, then manual entry, then "now".
 struct AddCatchSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -13,7 +17,6 @@ struct AddCatchSheet: View {
     @State private var showSavedRipple = false
 
     @Query(sort: \Species.sortOrder) private var allSpecies: [Species]
-    @Query(sort: \Catch.timestamp, order: .reverse) private var allCatches: [Catch]
 
     private var baitSuggestions: [String] {
         AutocompleteService.suggestions(for: .bait, context: context)
@@ -281,8 +284,8 @@ struct AddCatchSheet: View {
                         .frame(height: 150)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 } else {
-                    Text("Waiting for GPS…")
-                        .font(.cozyBody)
+                    Text("No location yet — auto-fills from photo or GPS, otherwise inherits from the matching session.")
+                        .font(.cozyCaption)
                         .foregroundStyle(Color.inkFaded)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -327,11 +330,15 @@ struct AddCatchSheet: View {
             .padding(.vertical, 16)
             .background(
                 Capsule(style: .continuous)
-                    .fill(form.canSave ? Color.sunset : Color.sunset.opacity(0.4))
+                    .fill(canSave ? Color.sunset : Color.sunset.opacity(0.4))
             )
         }
-        .disabled(!form.canSave || isSaving)
+        .disabled(!canSave || isSaving)
         .sensoryFeedback(.success, trigger: showSavedRipple)
+    }
+
+    private var canSave: Bool {
+        form.species != nil && form.weightValue >= 0
     }
 
     // MARK: - Actions
@@ -347,20 +354,53 @@ struct AddCatchSheet: View {
             form.locationSource = force ? .manual : .gps
             if force { form.userEditedLocation = true }
         } catch {
-            form.lastError = (error as? LocalizedError)?.errorDescription ?? "Couldn't get location."
+            // Silent — location is optional now; on save we fall back to the
+            // matching session's coordinate.
         }
     }
 
     private func extractMetadataFromFirstPhoto(_ items: [PhotosPickerItem]) async {
         guard let first = items.first else { return }
         guard let meta = await PhotoMetadataExtractor.extract(from: first) else { return }
-        form.applyPhotoMetadata(meta)
+        // Photo EXIF wins over the .now default. No clamping — if the photo
+        // was taken yesterday, the catch will auto-attach to yesterday's
+        // session on save.
+        if let captured = meta.capturedAt, !form.userEditedTimestamp {
+            form.timestamp = captured
+            form.timestampSource = .photo
+        }
+        if let coord = meta.coordinate, !form.userEditedLocation {
+            form.location = coord
+            form.locationSource = .photo
+        }
+    }
+
+    /// Find the session whose [startedAt, endedAt ?? .now] range contains the
+    /// given timestamp. If multiple match (rare — overlapping sessions), prefer
+    /// the most recently started.
+    private func findMatchingSession(for timestamp: Date) -> Session? {
+        let descriptor = FetchDescriptor<Session>(
+            sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
+        )
+        guard let sessions = try? context.fetch(descriptor) else { return nil }
+        return sessions.first { session in
+            guard timestamp >= session.startedAt else { return false }
+            let upper = session.endedAt ?? .now
+            return timestamp <= upper
+        }
     }
 
     private func save() async {
-        guard let coord = form.location, let species = form.species else { return }
+        guard let species = form.species else { return }
         isSaving = true
         defer { isSaving = false }
+
+        guard let matchedSession = findMatchingSession(for: form.timestamp) else {
+            form.lastError = "No session covers this time. Start a session that includes \(form.timestamp.formatted(date: .abbreviated, time: .shortened)), or pick a different time."
+            return
+        }
+
+        let coord = form.location ?? matchedSession.coordinate
 
         let newCatch = Catch(
             timestamp: form.timestamp,
@@ -372,7 +412,8 @@ struct AddCatchSheet: View {
             rodUsed: form.rodUsed.trimmingCharacters(in: .whitespacesAndNewlines),
             caughtBy: form.caughtBy.trimmingCharacters(in: .whitespacesAndNewlines),
             notes: form.notes,
-            species: species
+            species: species,
+            session: matchedSession
         )
         context.insert(newCatch)
 
@@ -384,26 +425,9 @@ struct AddCatchSheet: View {
             }
         }
 
-        _ = SpotClusteringService.assignSpot(for: newCatch, in: context)
-
         do {
             try context.save()
             showSavedRipple.toggle()
-            // Fire-and-forget conditions fetch for the new catch. Failures are
-            // recorded on the entry and retried next launch.
-            Task { @MainActor in
-                do {
-                    try await ConditionsBackfillService.shared.backfillOne(
-                        newCatch,
-                        weather: WeatherService.shared
-                    )
-                    try? context.save()
-                } catch {
-                    newCatch.conditionsFetchFailureCount += 1
-                    newCatch.conditionsFetchAttemptAt = .now
-                    try? context.save()
-                }
-            }
             dismiss()
         } catch {
             form.lastError = "Couldn't save: \(error.localizedDescription)"

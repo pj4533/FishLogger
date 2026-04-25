@@ -5,9 +5,9 @@ import Observation
 import OSLog
 import WeatherKit
 
-/// Populates the conditions fields on `Catch` by querying WeatherKit (historical
-/// hourly) and computing solunar locally. Runs once per app launch from
-/// `RootView.task`. Failures increment a counter and retry next launch.
+/// Populates the conditions fields on `Session` by querying WeatherKit
+/// (historical hourly) and computing solunar locally. Runs once per app launch
+/// from `RootView.task`. Failures increment a counter and retry next launch.
 @MainActor
 @Observable
 final class ConditionsBackfillService {
@@ -21,22 +21,22 @@ final class ConditionsBackfillService {
     /// backfill isn't a tight loop.
     private let callSpacing: UInt64 = 150_000_000 // 150 ms
 
-    /// Don't retry a failed catch sooner than this after the last attempt.
+    /// Don't retry a failed session sooner than this after the last attempt.
     private let retryCooldown: TimeInterval = 6 * 3600
 
-    /// Bail out on a catch with this many prior failures — it's probably outside
-    /// WeatherKit's historical window or the location is bad.
+    /// Bail out on a session with this many prior failures — it's probably
+    /// outside WeatherKit's historical window or the location is bad.
     private let maxFailures = 5
 
-    /// Flush the SwiftData context every N processed catches so partial progress
-    /// survives an app kill during a big first-run backfill.
+    /// Flush the SwiftData context every N processed sessions so partial
+    /// progress survives an app kill during a big first-run backfill.
     private let saveEvery = 5
 
     func backfillPending(context: ModelContext, weather: WeatherService) async {
         guard !didRunThisSession else { return }
         didRunThisSession = true
 
-        let candidates: [Catch]
+        let candidates: [Session]
         do {
             candidates = try fetchCandidates(context: context)
         } catch {
@@ -45,22 +45,22 @@ final class ConditionsBackfillService {
         }
 
         guard !candidates.isEmpty else {
-            log.debug("No catches need conditions backfill.")
+            log.debug("No sessions need conditions backfill.")
             return
         }
 
-        log.info("Backfilling conditions for \(candidates.count, privacy: .public) catches.")
+        log.info("Backfilling conditions for \(candidates.count, privacy: .public) sessions.")
 
         var processed = 0
-        for entry in candidates {
+        for session in candidates {
             if Task.isCancelled { break }
 
             do {
-                try await backfillOne(entry, weather: weather)
+                try await backfillOne(session, weather: weather)
             } catch {
-                entry.conditionsFetchFailureCount += 1
-                entry.conditionsFetchAttemptAt = .now
-                log.error("Catch \(entry.id.uuidString, privacy: .public) failed (\(entry.conditionsFetchFailureCount, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+                session.conditionsFetchFailureCount += 1
+                session.conditionsFetchAttemptAt = .now
+                log.error("Session \(session.id.uuidString, privacy: .public) failed (\(session.conditionsFetchFailureCount, privacy: .public)): \(error.localizedDescription, privacy: .public)")
             }
 
             processed += 1
@@ -75,64 +75,71 @@ final class ConditionsBackfillService {
         log.info("Backfill pass complete.")
     }
 
-    /// Populate conditions for a single catch. Also used by the new-catch save
-    /// path. Throws on WeatherKit / solunar failure; caller decides whether to
-    /// bump the failure counter.
-    func backfillOne(_ entry: Catch, weather: WeatherService) async throws {
-        let location = CLLocation(latitude: entry.latitude, longitude: entry.longitude)
-        let snapshot = try await weather.historical(at: location, date: entry.timestamp)
+    /// Populate conditions for a single session. Also used by the new-session
+    /// save path. Throws on WeatherKit / solunar failure; caller decides
+    /// whether to bump the failure counter.
+    func backfillOne(_ session: Session, weather: WeatherService) async throws {
+        let location = CLLocation(latitude: session.latitude, longitude: session.longitude)
+        let snapshot = try await weather.historical(at: location, date: session.startedAt)
 
-        apply(hour: snapshot.atHour, window: snapshot.window, to: entry)
+        apply(hour: snapshot.atHour, window: snapshot.window, to: session)
 
         let solunar = SolunarCalculator.compute(
-            lat: entry.latitude,
-            lon: entry.longitude,
-            date: entry.timestamp
+            lat: session.latitude,
+            lon: session.longitude,
+            date: session.startedAt
         )
-        apply(solunar: solunar, to: entry)
+        apply(solunar: solunar, to: session)
 
-        entry.conditionsFetchedAt = .now
-        entry.conditionsFetchAttemptAt = .now
-        entry.conditionsFetchFailureCount = 0
+        session.conditionsFetchedAt = .now
+        session.conditionsFetchAttemptAt = .now
+        session.conditionsFetchFailureCount = 0
+    }
+
+    /// Clears the fetched timestamp so the next backfill pass re-fetches.
+    /// Used by Session edit UI when startedAt or location changes materially.
+    func markStale(_ session: Session) {
+        session.conditionsFetchedAt = nil
+        session.conditionsFetchFailureCount = 0
     }
 
     // MARK: Private
 
-    private func fetchCandidates(context: ModelContext) throws -> [Catch] {
+    private func fetchCandidates(context: ModelContext) throws -> [Session] {
         let maxFailures = self.maxFailures
-        var descriptor = FetchDescriptor<Catch>(
-            predicate: #Predicate<Catch> {
+        var descriptor = FetchDescriptor<Session>(
+            predicate: #Predicate<Session> {
                 $0.conditionsFetchedAt == nil && $0.conditionsFetchFailureCount < maxFailures
             },
-            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+            sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
         descriptor.fetchLimit = 500
 
         let rows = try context.fetch(descriptor)
         // Retry cooldown — filter in Swift; SwiftData #Predicate date math is fiddly.
         let now = Date()
-        return rows.filter { entry in
-            guard let last = entry.conditionsFetchAttemptAt else { return true }
+        return rows.filter { session in
+            guard let last = session.conditionsFetchAttemptAt else { return true }
             return now.timeIntervalSince(last) >= retryCooldown
         }
     }
 
-    private func apply(hour: HourWeather, window: [HourWeather], to entry: Catch) {
-        entry.airTempC = hour.temperature.converted(to: .celsius).value
-        entry.humidity = hour.humidity
-        entry.cloudCoverage = hour.cloudCover
-        entry.conditionSymbol = hour.symbolName
-        entry.conditionCode = hour.condition.description
+    private func apply(hour: HourWeather, window: [HourWeather], to session: Session) {
+        session.airTempC = hour.temperature.converted(to: .celsius).value
+        session.humidity = hour.humidity
+        session.cloudCoverage = hour.cloudCover
+        session.conditionSymbol = hour.symbolName
+        session.conditionCode = hour.condition.description
 
-        entry.windSpeedKmh = hour.wind.speed.converted(to: .kilometersPerHour).value
-        entry.windGustKmh = hour.wind.gust?.converted(to: .kilometersPerHour).value
-        entry.windDirectionDegrees = hour.wind.direction.converted(to: .degrees).value
+        session.windSpeedKmh = hour.wind.speed.converted(to: .kilometersPerHour).value
+        session.windGustKmh = hour.wind.gust?.converted(to: .kilometersPerHour).value
+        session.windDirectionDegrees = hour.wind.direction.converted(to: .degrees).value
 
-        entry.pressureMb = hour.pressure.converted(to: .millibars).value
-        entry.pressureTrendRaw = PressureTrend(hour.pressureTrend).rawValue
+        session.pressureMb = hour.pressure.converted(to: .millibars).value
+        session.pressureTrendRaw = PressureTrend(hour.pressureTrend).rawValue
 
-        entry.precipIntensityMmh = hour.precipitationAmount.converted(to: .millimeters).value
-        entry.precipProbability = hour.precipitationChance
+        session.precipIntensityMmh = hour.precipitationAmount.converted(to: .millimeters).value
+        session.precipProbability = hour.precipitationChance
 
         // 6h trend: pressure(t) − pressure(t−6h). Our window is only ±3h, so we
         // fall back to the earliest hour in the window if nothing at t−6h. UI
@@ -141,28 +148,28 @@ final class ConditionsBackfillService {
            earliest.date < hour.date {
             let later = hour.pressure.converted(to: .millibars).value
             let earlier = earliest.pressure.converted(to: .millibars).value
-            entry.pressureTrend6hMb = later - earlier
+            session.pressureTrend6hMb = later - earlier
         } else {
-            entry.pressureTrend6hMb = nil
+            session.pressureTrend6hMb = nil
         }
     }
 
-    private func apply(solunar: Solunar, to entry: Catch) {
-        entry.sunriseAt = solunar.sunrise
-        entry.sunsetAt = solunar.sunset
-        entry.moonPhase = solunar.moonPhase
-        entry.moonIllumination = solunar.moonIllumination
+    private func apply(solunar: Solunar, to session: Session) {
+        session.sunriseAt = solunar.sunrise
+        session.sunsetAt = solunar.sunset
+        session.moonPhase = solunar.moonPhase
+        session.moonIllumination = solunar.moonIllumination
 
         let majors = solunar.majors
-        entry.solunarMajor1Start = majors.indices.contains(0) ? majors[0].start : nil
-        entry.solunarMajor1End   = majors.indices.contains(0) ? majors[0].end   : nil
-        entry.solunarMajor2Start = majors.indices.contains(1) ? majors[1].start : nil
-        entry.solunarMajor2End   = majors.indices.contains(1) ? majors[1].end   : nil
+        session.solunarMajor1Start = majors.indices.contains(0) ? majors[0].start : nil
+        session.solunarMajor1End   = majors.indices.contains(0) ? majors[0].end   : nil
+        session.solunarMajor2Start = majors.indices.contains(1) ? majors[1].start : nil
+        session.solunarMajor2End   = majors.indices.contains(1) ? majors[1].end   : nil
 
         let minors = solunar.minors
-        entry.solunarMinor1Start = minors.indices.contains(0) ? minors[0].start : nil
-        entry.solunarMinor1End   = minors.indices.contains(0) ? minors[0].end   : nil
-        entry.solunarMinor2Start = minors.indices.contains(1) ? minors[1].start : nil
-        entry.solunarMinor2End   = minors.indices.contains(1) ? minors[1].end   : nil
+        session.solunarMinor1Start = minors.indices.contains(0) ? minors[0].start : nil
+        session.solunarMinor1End   = minors.indices.contains(0) ? minors[0].end   : nil
+        session.solunarMinor2Start = minors.indices.contains(1) ? minors[1].start : nil
+        session.solunarMinor2End   = minors.indices.contains(1) ? minors[1].end   : nil
     }
 }

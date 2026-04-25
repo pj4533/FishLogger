@@ -1,29 +1,18 @@
 import SwiftUI
 
-/// Rendered inside CatchDetailView when a catch has successfully backfilled
-/// conditions. Surfaces the fishing-signal fields + a "caught during a
-/// major/minor" badge when applicable.
-struct ConditionsAtCatchSection: View {
-    let entry: Catch
+/// Renders the conditions/weather captured for a fishing session. Drop-in
+/// replacement for the previous per-catch conditions section — now a session
+/// can show conditions even if no fish were caught.
+struct ConditionsSessionCard: View {
+    let session: Session
 
     var body: some View {
-        if entry.conditionsFetchedAt != nil {
+        if session.conditionsFetchedAt != nil {
             CozyCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("CONDITIONS AT CATCH")
+                    Text("CONDITIONS")
                         .font(.fieldLabel)
                         .foregroundStyle(Color.inkFaded)
-
-                    if let activeWindow = activeSolunarWindow {
-                        HStack(spacing: 6) {
-                            Image(systemName: "star.fill")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(Color.sunset)
-                            Text("Caught during a solunar \(activeWindow)")
-                                .font(.cozyBody.weight(.semibold))
-                                .foregroundStyle(Color.ink)
-                        }
-                    }
 
                     HStack(alignment: .top, spacing: 16) {
                         pressureBlock
@@ -31,29 +20,24 @@ struct ConditionsAtCatchSection: View {
                         airBlock
                     }
 
-                    if entry.sunriseAt != nil || entry.sunsetAt != nil || entry.moonPhase != nil {
+                    if session.sunriseAt != nil || session.sunsetAt != nil || session.moonPhase != nil {
                         Divider().background(Color.bark.opacity(0.4))
                         sunMoonRow
+                    }
+
+                    if !session.solunarMajors.isEmpty || !session.solunarMinors.isEmpty {
+                        Divider().background(Color.bark.opacity(0.4))
+                        solunarRow
                     }
                 }
             }
         }
     }
 
-    private var activeSolunarWindow: String? {
-        if entry.solunarMajors.contains(where: { $0.contains(entry.timestamp) }) {
-            return "major"
-        }
-        if entry.solunarMinors.contains(where: { $0.contains(entry.timestamp) }) {
-            return "minor"
-        }
-        return nil
-    }
-
     private var pressureBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                if let trend = entry.pressureTrend {
+                if let trend = session.pressureTrend {
                     Image(systemName: trend.symbolName)
                         .font(.caption.weight(.bold))
                         .foregroundStyle(trend == .falling ? Color.sunset : Color.inkFaded)
@@ -62,18 +46,18 @@ struct ConditionsAtCatchSection: View {
                     .font(.fieldLabel)
                     .foregroundStyle(Color.inkFaded)
             }
-            if let mb = entry.pressureMb {
+            if let mb = session.pressureMb {
                 Text("\(String(format: "%.1f", mb)) mb")
                     .font(.cozyBody.weight(.semibold))
                     .foregroundStyle(Color.ink)
             } else {
                 Text("—").foregroundStyle(Color.inkFaded)
             }
-            if let delta = entry.pressureTrend6hMb {
+            if let delta = session.pressureTrend6hMb {
                 Text("\(delta >= 0 ? "+" : "")\(String(format: "%.1f", delta)) / 6h")
                     .font(.cozyCaption)
                     .foregroundStyle(Color.inkFaded)
-            } else if let trend = entry.pressureTrend {
+            } else if let trend = session.pressureTrend {
                 Text(trend.display)
                     .font(.cozyCaption)
                     .foregroundStyle(Color.inkFaded)
@@ -92,14 +76,14 @@ struct ConditionsAtCatchSection: View {
                     .font(.fieldLabel)
                     .foregroundStyle(Color.inkFaded)
             }
-            if let kmh = entry.windSpeedKmh {
+            if let kmh = session.windSpeedKmh {
                 Text("\(Int(kmh.rounded())) km/h")
                     .font(.cozyBody.weight(.semibold))
                     .foregroundStyle(Color.ink)
             } else {
                 Text("—").foregroundStyle(Color.inkFaded)
             }
-            if let deg = entry.windDirectionDegrees {
+            if let deg = session.windDirectionDegrees {
                 Text(compass(for: deg))
                     .font(.cozyCaption)
                     .foregroundStyle(Color.inkFaded)
@@ -111,7 +95,7 @@ struct ConditionsAtCatchSection: View {
     private var airBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                if let symbol = entry.conditionSymbol {
+                if let symbol = session.conditionSymbol {
                     Image(systemName: symbol)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.sunset)
@@ -120,7 +104,7 @@ struct ConditionsAtCatchSection: View {
                     .font(.fieldLabel)
                     .foregroundStyle(Color.inkFaded)
             }
-            if let tempC = entry.airTempC {
+            if let tempC = session.airTempC {
                 let f = tempC * 9 / 5 + 32
                 Text("\(Int(f.rounded()))°F")
                     .font(.cozyBody.weight(.semibold))
@@ -128,7 +112,7 @@ struct ConditionsAtCatchSection: View {
             } else {
                 Text("—").foregroundStyle(Color.inkFaded)
             }
-            if let cloud = entry.cloudCoverage {
+            if let cloud = session.cloudCoverage {
                 Text("\(Int((cloud * 100).rounded()))% cloud")
                     .font(.cozyCaption)
                     .foregroundStyle(Color.inkFaded)
@@ -139,23 +123,52 @@ struct ConditionsAtCatchSection: View {
 
     private var sunMoonRow: some View {
         HStack(spacing: 14) {
-            if let sunrise = entry.sunriseAt {
+            if let sunrise = session.sunriseAt {
                 Label(timeText(sunrise), systemImage: "sunrise.fill")
                     .font(.cozyCaption)
                     .foregroundStyle(Color.inkFaded)
             }
-            if let sunset = entry.sunsetAt {
+            if let sunset = session.sunsetAt {
                 Label(timeText(sunset), systemImage: "sunset.fill")
                     .font(.cozyCaption)
                     .foregroundStyle(Color.inkFaded)
             }
-            if let phase = entry.moonPhase {
+            if let phase = session.moonPhase {
                 Label("Moon \(Int((phase * 100).rounded()))%", systemImage: "moon.stars.fill")
                     .font(.cozyCaption)
                     .foregroundStyle(Color.inkFaded)
             }
             Spacer()
         }
+    }
+
+    private var solunarRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !session.solunarMajors.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "star.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.sunset)
+                    Text("Majors: \(session.solunarMajors.map { intervalText($0) }.joined(separator: ", "))")
+                        .font(.cozyCaption)
+                        .foregroundStyle(Color.ink)
+                }
+            }
+            if !session.solunarMinors.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "star")
+                        .font(.caption)
+                        .foregroundStyle(Color.inkFaded)
+                    Text("Minors: \(session.solunarMinors.map { intervalText($0) }.joined(separator: ", "))")
+                        .font(.cozyCaption)
+                        .foregroundStyle(Color.inkFaded)
+                }
+            }
+        }
+    }
+
+    private func intervalText(_ interval: DateInterval) -> String {
+        "\(timeText(interval.start))–\(timeText(interval.end))"
     }
 
     private func compass(for degrees: Double) -> String {

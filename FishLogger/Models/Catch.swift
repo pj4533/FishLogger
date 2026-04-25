@@ -16,55 +16,10 @@ final class Catch {
     var notes: String
 
     var species: Species?
-    var spot: Spot?
+    var session: Session?
 
     @Relationship(deleteRule: .cascade, inverse: \MediaAsset.owner)
     var media: [MediaAsset] = []
-
-    // MARK: Conditions (optional — populated by ConditionsBackfillService / save-time hook)
-
-    // Weather core
-    var airTempC: Double?
-    var humidity: Double?            // 0–1
-    var cloudCoverage: Double?       // 0–1
-    var conditionSymbol: String?     // SF Symbol from WeatherCondition.symbolName
-    var conditionCode: String?       // Raw stable key for future LLM grounding
-
-    // Wind
-    var windSpeedKmh: Double?
-    var windGustKmh: Double?
-    var windDirectionDegrees: Double?
-
-    // Pressure — the top fishing signal
-    var pressureMb: Double?
-    var pressureTrendRaw: String?    // PressureTrend raw value
-    var pressureTrend6hMb: Double?   // pressure(t) − pressure(t−6h); pre-frontal indicator
-
-    // Precipitation
-    var precipIntensityMmh: Double?
-    var precipProbability: Double?
-
-    // Sun / Moon
-    var sunriseAt: Date?
-    var sunsetAt: Date?
-    var moonPhase: Double?           // 0–1; 0=new, 0.5=full
-    var moonIllumination: Double?
-
-    // Solunar majors/minors — discrete slots (≤2 each per day)
-    var solunarMajor1Start: Date?
-    var solunarMajor1End: Date?
-    var solunarMajor2Start: Date?
-    var solunarMajor2End: Date?
-    var solunarMinor1Start: Date?
-    var solunarMinor1End: Date?
-    var solunarMinor2Start: Date?
-    var solunarMinor2End: Date?
-
-    // Backfill bookkeeping
-    var conditionsFetchedAt: Date?         // non-nil ⇒ successful backfill
-    var conditionsFetchAttemptAt: Date?
-    var conditionsFetchFailureCount: Int = 0
-    var conditionsSchemaVersion: Int = 0
 
     init(
         timestamp: Date = .now,
@@ -77,7 +32,7 @@ final class Catch {
         caughtBy: String = "",
         notes: String = "",
         species: Species? = nil,
-        spot: Spot? = nil
+        session: Session? = nil
     ) {
         self.id = UUID()
         self.timestamp = timestamp
@@ -90,35 +45,15 @@ final class Catch {
         self.caughtBy = caughtBy
         self.notes = notes
         self.species = species
-        self.spot = spot
+        self.session = session
     }
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
-    var pressureTrend: PressureTrend? {
-        pressureTrendRaw.flatMap(PressureTrend.init(rawValue:))
-    }
-
-    var solunarMajors: [DateInterval] {
-        [
-            interval(solunarMajor1Start, solunarMajor1End),
-            interval(solunarMajor2Start, solunarMajor2End)
-        ].compactMap { $0 }
-    }
-
-    var solunarMinors: [DateInterval] {
-        [
-            interval(solunarMinor1Start, solunarMinor1End),
-            interval(solunarMinor2Start, solunarMinor2End)
-        ].compactMap { $0 }
-    }
-
-    private func interval(_ start: Date?, _ end: Date?) -> DateInterval? {
-        guard let start, let end, end > start else { return nil }
-        return DateInterval(start: start, end: end)
-    }
+    /// Convenience: the Spot associated with this catch's parent Session.
+    var spot: Spot? { session?.spot }
 }
 
 enum PressureTrend: String, CaseIterable {

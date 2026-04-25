@@ -11,8 +11,8 @@ final class Spot {
     var isManual: Bool
     var createdAt: Date
 
-    @Relationship(inverse: \Catch.spot)
-    var catches: [Catch] = []
+    @Relationship(inverse: \Session.spot)
+    var sessions: [Session] = []
 
     init(name: String, centerLat: Double, centerLon: Double, isManual: Bool = false, createdAt: Date = .now) {
         self.id = UUID()
@@ -25,5 +25,10 @@ final class Spot {
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: centerLat, longitude: centerLon)
+    }
+
+    /// All catches logged at this spot, derived via sessions.
+    var catches: [Catch] {
+        sessions.flatMap { $0.catches }
     }
 }

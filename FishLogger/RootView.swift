@@ -6,8 +6,8 @@ struct RootView: View {
 
     var body: some View {
         TabView {
-            NavigationStack { DiaryListView() }
-                .tabItem { Label("Diary", systemImage: "book.closed.fill") }
+            NavigationStack { SessionListView() }
+                .tabItem { Label("Sessions", systemImage: "book.closed.fill") }
 
             NavigationStack { SpotsListView() }
                 .tabItem { Label("Spots", systemImage: "map.fill") }
