@@ -3,9 +3,12 @@ import SwiftData
 import MapKit
 
 struct SessionListView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Session.startedAt, order: .reverse) private var sessions: [Session]
     @State private var showingNew = false
     @State private var showingAddCatch = false
+    @State private var exportFile: ShareableFile?
+    @State private var exportError: String?
 
     var body: some View {
         Group {
@@ -46,6 +49,12 @@ struct SessionListView: View {
                     } label: {
                         Label("Add catch", systemImage: "fish.fill")
                     }
+                    Divider()
+                    Button {
+                        exportData()
+                    } label: {
+                        Label("Export data", systemImage: "square.and.arrow.up")
+                    }
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
@@ -59,6 +68,14 @@ struct SessionListView: View {
         .sheet(isPresented: $showingAddCatch) {
             AddCatchSheet()
         }
+        .sheet(item: $exportFile) { file in
+            ShareSheet(items: [file.url])
+        }
+        .alert("Export failed", isPresented: .constant(exportError != nil)) {
+            Button("OK") { exportError = nil }
+        } message: {
+            Text(exportError ?? "")
+        }
         .navigationDestination(for: Session.self) { session in
             SessionDetailView(session: session)
         }
@@ -66,6 +83,15 @@ struct SessionListView: View {
             CatchDetailView(entry: entry)
         }
         .background(Color.paper.ignoresSafeArea())
+    }
+
+    private func exportData() {
+        do {
+            let url = try ExportService.makeJSONFile(context: modelContext)
+            exportFile = ShareableFile(url: url)
+        } catch {
+            exportError = error.localizedDescription
+        }
     }
 }
 
