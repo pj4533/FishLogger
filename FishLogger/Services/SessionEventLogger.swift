@@ -84,9 +84,20 @@ enum SessionEventLogger {
         return "Note added"
     }
 
-    /// Stamps a newly created catch with the session's live setup/sub-spot and
-    /// mirrors `rod`/`lure` onto the legacy `rodUsed`/`baitUsed` fields.
-    /// Call before inserting/saving the catch.
+    @discardableResult
+    static func changeAngler(
+        _ name: String,
+        on session: Session,
+        context: ModelContext
+    ) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        session.currentAngler = trimmed
+        return trimmed.isEmpty ? "Angler cleared" : "Angler: \(trimmed)"
+    }
+
+    /// Stamps a newly created catch with the session's live setup/sub-spot,
+    /// defaults `caughtBy` to the session angler, and mirrors `rod`/`lure` onto
+    /// the legacy `rodUsed`/`baitUsed` fields. Call before inserting the catch.
     static func stampSetup(on entry: Catch, from session: Session) {
         let setup = session.currentSetup
         if !setup.isEmpty {
@@ -96,6 +107,9 @@ enum SessionEventLogger {
         }
         if !session.currentSubSpot.isEmpty {
             entry.subSpotSnapshot = session.currentSubSpot
+        }
+        if entry.caughtBy.isEmpty, !session.currentAngler.isEmpty {
+            entry.caughtBy = session.currentAngler
         }
     }
 

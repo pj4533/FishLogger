@@ -95,6 +95,38 @@ struct AssistantToolDispatchTests {
     }
 
     @Test
+    func setAnglerStoresOnSessionAndDefaultsCatchCredit() throws {
+        let (container, context) = try makeContext()
+        _ = container
+        context.insert(Species(commonName: "Largemouth Bass", scientificName: "Micropterus salmoides"))
+        let session = makeSession(context)
+
+        let r = AssistantTools.dispatch(name: "set_angler", argsJSON: #"{"name":"PJ"}"#, session: session, context: context, now: now)
+        #expect(r.ok)
+        #expect(session.currentAngler == "PJ")
+
+        // A catch with no explicit caughtBy defaults to the session angler.
+        _ = AssistantTools.dispatch(name: "log_catch",
+            argsJSON: #"{"species":"largemouth","weight":2.0}"#, session: session, context: context, now: now)
+        #expect(session.catches.first?.caughtBy == "PJ")
+    }
+
+    @Test
+    func logCatchCaughtByOverridesSessionAngler() throws {
+        let (container, context) = try makeContext()
+        _ = container
+        context.insert(Species(commonName: "Largemouth Bass", scientificName: "Micropterus salmoides"))
+        let session = makeSession(context)
+        session.currentAngler = "PJ"
+
+        let r = AssistantTools.dispatch(name: "log_catch",
+            argsJSON: #"{"species":"largemouth","weight":4.0,"caughtBy":"Dave"}"#,
+            session: session, context: context, now: now)
+        #expect(r.ok)
+        #expect(session.catches.first?.caughtBy == "Dave")
+    }
+
+    @Test
     func endSessionSetsEndedAt() throws {
         let (container, context) = try makeContext()
         _ = container
@@ -120,7 +152,7 @@ struct AssistantToolDispatchTests {
     @Test
     func toolSchemaIsValidFunctionJSON() throws {
         let tools = AssistantTools.tools()
-        #expect(tools.count == 6)
+        #expect(tools.count == 7)
 
         // Each tool is a function with a name and an object-typed parameters schema.
         for tool in tools {

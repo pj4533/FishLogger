@@ -25,6 +25,9 @@ final class Session {
     var currentSetupJSON: String?
     /// Current micro-location within the spot ("by the dam").
     var currentSubSpot: String = ""
+    /// Who is fishing right now — the default `caughtBy` for catches this
+    /// session (a specific catch can override it, e.g. "Dave got one").
+    var currentAngler: String = ""
 
     /// What the angler is fishing with right now. Snapshotted onto each catch
     /// and each `.setupChange` event.

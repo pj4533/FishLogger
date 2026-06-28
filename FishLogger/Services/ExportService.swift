@@ -167,6 +167,7 @@ struct SessionDTO: Codable {
 
     let currentSetup: Setup
     let currentSubSpot: String
+    let currentAngler: String
     let events: [SessionEventDTO]
     let coverageSegments: [CoverageSegmentDTO]
 
@@ -208,6 +209,7 @@ struct SessionDTO: Codable {
 
         currentSetup = session.currentSetup
         currentSubSpot = session.currentSubSpot
+        currentAngler = session.currentAngler
         events = session.events
             .sorted { $0.timestamp < $1.timestamp }
             .map(SessionEventDTO.init)

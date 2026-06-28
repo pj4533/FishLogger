@@ -49,6 +49,10 @@ enum AssistantTools {
                "Record where on the spot the angler is now fishing, e.g. 'by the dam', 'the lily pads on the north bank'.",
                properties: ["location": str("Free-text micro-location within the spot.")],
                required: ["location"]),
+            fn("set_angler",
+               "Record who is fishing this session (the default person credited with catches). Call this when the angler says who they are or who's with them, e.g. 'it's me and Dave today'.",
+               properties: ["name": str("The angler's name.")],
+               required: ["name"]),
             fn("log_bite",
                "Record a bite or missed fish — a blowup, short strike, follow, or a fish that bit but wasn't landed. Use this for action that did NOT result in a landed catch.",
                properties: [
@@ -62,6 +66,7 @@ enum AssistantTools {
                    "species": str("Species common name, e.g. 'Largemouth Bass'."),
                    "weight": ["type": "number", "description": "Weight in pounds."],
                    "isMeasured": ["type": "boolean", "description": "True if weighed/measured, false if estimated."],
+                   "caughtBy": str("Who caught it, if named (e.g. 'Dave'). Omit to credit the current angler."),
                    "notes": str("Optional detail.")
                ], required: []),
             fn("add_note",
@@ -102,6 +107,10 @@ enum AssistantTools {
             let outcome = BiteOutcome(rawValue: (str(args["kind"]) ?? "bite").lowercased()) ?? .bite
             return Result(ok: true, summary: SessionEventLogger.logBite(outcome, detail: str(args["notes"]), on: session, at: now, context: context))
 
+        case "set_angler":
+            guard let name = str(args["name"]) else { return Result(ok: false, summary: "No name given") }
+            return Result(ok: true, summary: SessionEventLogger.changeAngler(name, on: session, context: context))
+
         case "log_catch":
             let speciesName = str(args["species"])
             let species = matchSpecies(speciesName, context: context)
@@ -109,13 +118,15 @@ enum AssistantTools {
             let entry = Catch(
                 timestamp: now, latitude: session.latitude, longitude: session.longitude,
                 weight: weight, isMeasured: bool(args["isMeasured"]) ?? false,
+                caughtBy: str(args["caughtBy"]) ?? "",
                 notes: str(args["notes"]) ?? "", species: species, session: session
             )
-            SessionEventLogger.stampSetup(on: entry, from: session)
+            SessionEventLogger.stampSetup(on: entry, from: session)   // defaults caughtBy to the session angler if blank
             context.insert(entry)
             let label = species?.commonName ?? speciesName ?? "fish"
             let wt = weight > 0 ? String(format: " (%.1f lb)", weight) : ""
-            return Result(ok: true, summary: "Logged \(label)\(wt)")
+            let by = entry.caughtBy.isEmpty ? "" : " — \(entry.caughtBy)"
+            return Result(ok: true, summary: "Logged \(label)\(wt)\(by)")
 
         case "add_note":
             // Accept any of a few plausible keys, or fall back to the whole blob.

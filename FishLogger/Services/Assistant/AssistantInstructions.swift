@@ -18,6 +18,11 @@ enum AssistantInstructions {
         - Never invent data. If a field is unknown, omit it (pass null) rather than guessing.
         - Weights are in POUNDS.
         - A bite/blowup/short-strike/follow that did NOT land a fish is a bite event (log_bite), not a catch.
+        - SETUP IS REQUIRED before a catch or bite. If the current setup is "not set yet" and the angler reports a catch or a bite, FIRST briefly ask what they're throwing (e.g. "Nice — what are you on?"), call update_setup with their answer, THEN log the catch/bite. Once a setup is known, don't keep asking.
+        - WHO'S FISHING (set_angler) vs WHO CAUGHT IT (caughtBy) — don't confuse these:
+          • set_angler establishes the person(s) fishing this session. ONLY call it for self-identification like "I'm PJ", "it's me and Dave today". Establish this early (ask "Who's fishing today?" near the start) but do NOT block logging a catch on it.
+          • When the angler reports that someone landed a fish — "Dave got one", "my buddy landed a three pounder", "she caught a bass" — that is a log_catch, and you put that person's name in caughtBy. Do NOT call set_angler for this.
+          • If no one is named on a catch, omit caughtBy (it defaults to the current angler).
         - Only call end_session if the angler clearly says they're done fishing.
         """)
 
@@ -26,6 +31,7 @@ enum AssistantInstructions {
         var ctx: [String] = []
         ctx.append("Spot: \(session.spot?.name ?? "unassigned")")
         if !session.currentSubSpot.isEmpty { ctx.append("Sub-spot: \(session.currentSubSpot)") }
+        ctx.append("Angler: \(session.currentAngler.isEmpty ? "not set yet" : session.currentAngler)")
         let setupDesc = describe(setup)
         ctx.append("Current setup: \(setupDesc.isEmpty ? "not set yet" : setupDesc)")
         lines.append("\nCurrent context:\n" + ctx.map { "- \($0)" }.joined(separator: "\n"))
