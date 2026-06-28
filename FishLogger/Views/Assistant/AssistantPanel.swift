@@ -71,15 +71,27 @@ struct AssistantPanel: View {
 
                 #if DEBUG
                 Divider()
-                Button {
-                    assistant.debugRunCannedSequence(session: session, context: context, species: species)
-                } label: {
-                    Label("Simulate tool calls (debug)", systemImage: "ladybug.fill")
-                        .font(.cozyCaption)
-                        .foregroundStyle(Color.inkFaded)
+                if assistant.isActive {
+                    Button {
+                        assistant.debugSendTextTurn("I just switched to a chartreuse spinnerbait, slow rolling it.")
+                    } label: {
+                        Label("Send test phrase (live)", systemImage: "text.bubble.fill")
+                            .font(.cozyCaption)
+                            .foregroundStyle(Color.sunset)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("debugSendTextTurn")
+                } else {
+                    Button {
+                        assistant.debugRunCannedSequence(session: session, context: context, species: species)
+                    } label: {
+                        Label("Simulate tool calls (offline debug)", systemImage: "ladybug.fill")
+                            .font(.cozyCaption)
+                            .foregroundStyle(Color.inkFaded)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("debugSimulateToolCalls")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("debugSimulateToolCalls")
                 #endif
             }
         }

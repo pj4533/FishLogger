@@ -11,8 +11,10 @@ import OSLog
 /// from a tiny backend and pass that instead — only the token source changes.
 @MainActor
 final class RealtimeClient {
-    /// Latest Realtime model (per https://developers.openai.com/api/docs/models/gpt-realtime-2).
-    static let model = "gpt-realtime-2"
+    /// Realtime model. `gpt-realtime-mini` is enabled for this account and tuned
+    /// for tool calling; swap to `gpt-realtime-2` once that model is granted
+    /// runtime access (it's in the catalog but not yet runnable here).
+    static let model = "gpt-realtime-mini"
     /// PCM16 mono sample rate used both directions.
     static let sampleRate = 24_000
 
@@ -118,6 +120,17 @@ final class RealtimeClient {
             task.send(.string(text)) { _ in }
         }
     }
+
+    #if DEBUG
+    /// Test hook: inject a text user turn and request a response, to exercise
+    /// the live model + tool calling without a microphone.
+    func sendTextTurn(_ text: String) {
+        send(["type": "conversation.item.create",
+              "item": ["type": "message", "role": "user",
+                       "content": [["type": "input_text", "text": text]]]])
+        send(["type": "response.create"])
+    }
+    #endif
 
     private func send(_ object: [String: Any]) {
         guard let task,

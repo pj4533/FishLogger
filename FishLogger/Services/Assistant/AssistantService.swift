@@ -146,6 +146,13 @@ final class AssistantService {
     }
 
     #if DEBUG
+    /// Test hook: send a text turn over the LIVE connection so the real model
+    /// processes it and (hopefully) calls a tool — verifies the end-to-end
+    /// network + model + dispatch path without a microphone.
+    func debugSendTextTurn(_ text: String) {
+        client?.sendTextTurn(text)
+    }
+
     /// Test hook: run a canned sequence of tool calls through the full dispatch
     /// + save + feed path without a live connection, to verify the data flow in
     /// the simulator (where we can't actually speak).
