@@ -75,7 +75,9 @@ final class RealtimeAudioEngine {
 
     /// Schedules a PCM16 (24 kHz mono) chunk from the server for playback.
     func enqueue(_ pcm16: Data) {
-        guard !pcm16.isEmpty else { return }
+        // Ignore audio that arrives before/after the engine is running (e.g. the
+        // text-only debug path never starts capture/playback).
+        guard engine.isRunning, player.engine != nil, !pcm16.isEmpty else { return }
         let frameCount = pcm16.count / 2
         guard frameCount > 0,
               let buffer = AVAudioPCMBuffer(pcmFormat: playbackFormat, frameCapacity: AVAudioFrameCount(frameCount)),

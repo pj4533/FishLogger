@@ -51,6 +51,10 @@ final class AssistantService {
     // MARK: - Lifecycle
 
     func start(session: Session, context: ModelContext, species: [Species]) async {
+        await connect(session: session, context: context, species: species, captureAudio: true)
+    }
+
+    private func connect(session: Session, context: ModelContext, species: [Species], captureAudio: Bool) async {
         guard client == nil else { return }
         self.session = session
         self.context = context
@@ -73,6 +77,8 @@ final class AssistantService {
         self.client = client
         muted = false
 
+        guard captureAudio else { return }   // text-only debug path skips the mic
+
         guard let sink = client.makeAudioSink() else {
             phase = .error("Couldn't open the audio connection.")
             stop()
@@ -89,6 +95,15 @@ final class AssistantService {
             stop()
         }
     }
+
+    #if DEBUG
+    /// Connects WITHOUT starting the microphone — for deterministic text-turn
+    /// testing in the simulator, where the Mac mic otherwise feeds ambient audio
+    /// to the live model.
+    func debugConnectTextOnly(session: Session, context: ModelContext, species: [Species]) async {
+        await connect(session: session, context: context, species: species, captureAudio: false)
+    }
+    #endif
 
     func stop() {
         audio.stop()

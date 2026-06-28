@@ -13,6 +13,18 @@ struct AssistantPanel: View {
     @State private var assistant = AssistantService()
     @State private var showingSettings = false
 
+    #if DEBUG
+    private struct DebugPhrase { let id = UUID(); let tool: String; let text: String }
+    private static let debugPhrases: [DebugPhrase] = [
+        .init(tool: "update_setup", text: "Switching to a black hollow body frog, fishing topwater."),
+        .init(tool: "set_sub_spot", text: "I'm fishing over by the dam now."),
+        .init(tool: "log_bite", text: "Had a big blowup on the frog but I missed him."),
+        .init(tool: "log_catch", text: "Just landed a three and a half pound largemouth bass."),
+        .init(tool: "add_note", text: "Make a note that the water is really muddy today."),
+        .init(tool: "end_session", text: "Alright, I'm all done fishing for the day.")
+    ]
+    #endif
+
     var body: some View {
         CozyCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -72,16 +84,31 @@ struct AssistantPanel: View {
                 #if DEBUG
                 Divider()
                 if assistant.isActive {
+                    Text("DEBUG: SEND LIVE PHRASE")
+                        .font(.fieldLabel)
+                        .foregroundStyle(Color.inkFaded)
+                    ForEach(Self.debugPhrases, id: \.id) { phrase in
+                        Button {
+                            assistant.debugSendTextTurn(phrase.text)
+                        } label: {
+                            Label("\(phrase.tool): “\(phrase.text)”", systemImage: "text.bubble.fill")
+                                .font(.cozyCaption)
+                                .foregroundStyle(Color.sunset)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("dbg_\(phrase.tool)")
+                    }
+                } else {
                     Button {
-                        assistant.debugSendTextTurn("I just switched to a chartreuse spinnerbait, slow rolling it.")
+                        Task { await assistant.debugConnectTextOnly(session: session, context: context, species: species) }
                     } label: {
-                        Label("Send test phrase (live)", systemImage: "text.bubble.fill")
+                        Label("Connect text-only (no mic, debug)", systemImage: "keyboard")
                             .font(.cozyCaption)
                             .foregroundStyle(Color.sunset)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityIdentifier("debugSendTextTurn")
-                } else {
+                    .accessibilityIdentifier("debugConnectTextOnly")
                     Button {
                         assistant.debugRunCannedSequence(session: session, context: context, species: species)
                     } label: {

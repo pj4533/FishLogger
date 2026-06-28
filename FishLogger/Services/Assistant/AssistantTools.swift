@@ -65,8 +65,8 @@ enum AssistantTools {
                    "notes": str("Optional detail.")
                ], required: []),
             fn("add_note",
-               "Record a general free-text note about the session.",
-               properties: ["text": str("The note text.")],
+               "Record a free-text note about anything that isn't a setup change, sub-spot, bite, or catch — water clarity, weather, structure, fish behavior, or an explicit 'make a note that…'. Call this rather than only replying verbally.",
+               properties: ["text": str("The note text (the angler's words).")],
                required: ["text"]),
             fn("end_session",
                "End the current fishing session. This finalizes the timeline so no-catch coverage can be derived.",
@@ -79,66 +79,77 @@ enum AssistantTools {
     /// Performs the SwiftData mutation for a tool call. Does NOT call
     /// `context.save()` — the caller saves once after dispatch.
     static func dispatch(name: String, argsJSON: String, session: Session, context: ModelContext, now: Date = .now) -> Result {
-        let data = Data(argsJSON.utf8)
-        do {
-            switch name {
-            case "update_setup":
-                let a = try decode(UpdateSetupArgs.self, data)
-                let partial = Setup(rod: a.rod, reel: a.reel, line: a.line, lure: a.lure, color: a.color, technique: a.technique)
-                if partial.isEmpty { return Result(ok: false, summary: "No fields to update") }
-                let summary = SessionEventLogger.changeSetup(partial, on: session, at: now, context: context)
-                return Result(ok: true, summary: summary)
+        // Lenient parse: tolerate odd shapes / types from the model rather than
+        // failing the whole call. Missing fields just read as nil.
+        let args = (try? JSONSerialization.jsonObject(with: Data(argsJSON.utf8))) as? [String: Any] ?? [:]
 
-            case "set_sub_spot":
-                let a = try decode(SetSubSpotArgs.self, data)
-                let summary = SessionEventLogger.changeSubSpot(a.location, on: session, at: now, context: context)
-                return Result(ok: true, summary: summary)
+        switch name {
+        case "update_setup":
+            let partial = Setup(
+                rod: str(args["rod"]), reel: str(args["reel"]), line: str(args["line"]),
+                lure: str(args["lure"]), color: str(args["color"]), technique: str(args["technique"])
+            )
+            if partial.isEmpty { return Result(ok: false, summary: "No fields to update") }
+            return Result(ok: true, summary: SessionEventLogger.changeSetup(partial, on: session, at: now, context: context))
 
-            case "log_bite":
-                let a = try decode(LogBiteArgs.self, data)
-                let outcome = BiteOutcome(rawValue: a.kind) ?? .bite
-                let summary = SessionEventLogger.logBite(outcome, detail: a.notes, on: session, at: now, context: context)
-                return Result(ok: true, summary: summary)
-
-            case "log_catch":
-                let a = try decode(LogCatchArgs.self, data)
-                let species = matchSpecies(a.species, context: context)
-                let entry = Catch(
-                    timestamp: now,
-                    latitude: session.latitude,
-                    longitude: session.longitude,
-                    weight: a.weight ?? 0,
-                    isMeasured: a.isMeasured ?? false,
-                    notes: a.notes ?? "",
-                    species: species,
-                    session: session
-                )
-                SessionEventLogger.stampSetup(on: entry, from: session)
-                context.insert(entry)
-                let name = species?.commonName ?? a.species ?? "fish"
-                let wt = (a.weight ?? 0) > 0 ? String(format: " (%.1f lb)", a.weight ?? 0) : ""
-                return Result(ok: true, summary: "Logged \(name)\(wt)")
-
-            case "add_note":
-                let a = try decode(AddNoteArgs.self, data)
-                let summary = SessionEventLogger.logNote(a.text, on: session, at: now, context: context)
-                return Result(ok: true, summary: summary)
-
-            case "end_session":
-                guard session.isOngoing else { return Result(ok: false, summary: "Session already ended") }
-                session.endedAt = now
-                return Result(ok: true, summary: "Session ended")
-
-            default:
-                return Result(ok: false, summary: "Unknown tool \(name)")
+        case "set_sub_spot":
+            guard let location = str(args["location"]) ?? str(args["sub_spot"]), !location.isEmpty else {
+                return Result(ok: false, summary: "No location given")
             }
-        } catch {
-            return Result(ok: false, summary: "Bad arguments: \(error.localizedDescription)")
+            return Result(ok: true, summary: SessionEventLogger.changeSubSpot(location, on: session, at: now, context: context))
+
+        case "log_bite":
+            let outcome = BiteOutcome(rawValue: (str(args["kind"]) ?? "bite").lowercased()) ?? .bite
+            return Result(ok: true, summary: SessionEventLogger.logBite(outcome, detail: str(args["notes"]), on: session, at: now, context: context))
+
+        case "log_catch":
+            let speciesName = str(args["species"])
+            let species = matchSpecies(speciesName, context: context)
+            let weight = num(args["weight"]) ?? 0
+            let entry = Catch(
+                timestamp: now, latitude: session.latitude, longitude: session.longitude,
+                weight: weight, isMeasured: bool(args["isMeasured"]) ?? false,
+                notes: str(args["notes"]) ?? "", species: species, session: session
+            )
+            SessionEventLogger.stampSetup(on: entry, from: session)
+            context.insert(entry)
+            let label = species?.commonName ?? speciesName ?? "fish"
+            let wt = weight > 0 ? String(format: " (%.1f lb)", weight) : ""
+            return Result(ok: true, summary: "Logged \(label)\(wt)")
+
+        case "add_note":
+            // Accept any of a few plausible keys, or fall back to the whole blob.
+            let text = str(args["text"]) ?? str(args["note"]) ?? str(args["content"]) ?? argsJSON
+            guard !text.isEmpty else { return Result(ok: false, summary: "Empty note") }
+            return Result(ok: true, summary: SessionEventLogger.logNote(text, on: session, at: now, context: context))
+
+        case "end_session":
+            guard session.isOngoing else { return Result(ok: false, summary: "Session already ended") }
+            session.endedAt = now
+            return Result(ok: true, summary: "Session ended")
+
+        default:
+            return Result(ok: false, summary: "Unknown tool \(name)")
         }
     }
 
-    private static func decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
-        try JSONDecoder().decode(type, from: data)
+    // Lenient coercion helpers (models sometimes send numbers as strings, etc.).
+    private static func str(_ v: Any?) -> String? {
+        if let s = v as? String { return s.isEmpty ? nil : s }
+        if let n = v as? NSNumber { return n.stringValue }
+        return nil
+    }
+    private static func num(_ v: Any?) -> Double? {
+        if let d = v as? Double { return d }
+        if let n = v as? NSNumber { return n.doubleValue }
+        if let s = v as? String { return Double(s) }
+        return nil
+    }
+    private static func bool(_ v: Any?) -> Bool? {
+        if let b = v as? Bool { return b }
+        if let n = v as? NSNumber { return n.boolValue }
+        if let s = v as? String { return (s as NSString).boolValue }
+        return nil
     }
 
     /// Case-insensitive match of a spoken species name against known species —
@@ -151,16 +162,3 @@ enum AssistantTools {
         return all.first { $0.commonName.lowercased().contains(needle) || needle.contains($0.commonName.lowercased()) }
     }
 }
-
-// MARK: - Arg structs (optional fields decode `null` -> nil)
-
-private struct UpdateSetupArgs: Decodable {
-    var rod: String?; var reel: String?; var line: String?
-    var lure: String?; var color: String?; var technique: String?
-}
-private struct SetSubSpotArgs: Decodable { var location: String }
-private struct LogBiteArgs: Decodable { var kind: String; var notes: String? }
-private struct LogCatchArgs: Decodable {
-    var species: String?; var weight: Double?; var isMeasured: Bool?; var notes: String?
-}
-private struct AddNoteArgs: Decodable { var text: String }
