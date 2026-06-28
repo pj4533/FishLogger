@@ -411,7 +411,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "FishLogger uses the camera to photograph catches.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "FishLogger tags each catch with its GPS location.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FishLogger records dictation of catch details.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FishLogger uses the mic for the hands-free voice assistant.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "FishLogger saves catch photos to your library.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "FishLogger lets you pick catch photos from your library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -450,7 +450,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "FishLogger uses the camera to photograph catches.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "FishLogger tags each catch with its GPS location.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FishLogger records dictation of catch details.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FishLogger uses the mic for the hands-free voice assistant.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "FishLogger saves catch photos to your library.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "FishLogger lets you pick catch photos from your library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

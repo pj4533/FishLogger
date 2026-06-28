@@ -61,15 +61,6 @@ struct AddCatchSheet: View {
                     Button("Cancel") { dismiss() }
                         .foregroundStyle(Color.ink)
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        // reserved for future dictation mode
-                    } label: {
-                        Image(systemName: "mic.fill")
-                    }
-                    .disabled(true)
-                    .help("Dictation coming soon")
-                }
             }
             .task { await requestLocationIfNeeded() }
             .onChange(of: form.pickedMedia) { _, newItems in

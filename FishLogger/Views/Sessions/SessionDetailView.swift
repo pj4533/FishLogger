@@ -40,6 +40,9 @@ struct SessionDetailView: View {
         ScrollView {
             VStack(spacing: 16) {
                 headerBlock
+                if session.isOngoing {
+                    AssistantPanel(session: session)
+                }
                 if isEditing {
                     editBlock
                 }
