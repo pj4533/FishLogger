@@ -53,3 +53,8 @@ playground.xcworkspace
 *~
 .idea/
 .vscode/
+
+# Local secrets (OpenAI key for testing)
+.env
+.env.local
+.env.*
