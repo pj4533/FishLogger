@@ -12,7 +12,9 @@ enum ExportService {
 
     /// Schema version of the export envelope itself. Bump when the JSON shape
     /// changes so downstream analysis can branch on it.
-    static let exportSchemaVersion = 1
+    /// v2: adds per-session `events`, `coverageSegments`, `currentSetup`,
+    /// `currentSubSpot`, and per-catch `setup`.
+    static let exportSchemaVersion = 2
 
     static func makeJSONFile(context: ModelContext, now: Date = .now) throws -> URL {
         let snapshot = try buildSnapshot(context: context, now: now)
@@ -43,8 +45,10 @@ enum ExportService {
             FetchDescriptor<Species>(sortBy: [SortDescriptor(\.sortOrder, order: .forward)])
         )
 
-        let sessionDTOs = sessions.map(SessionDTO.init)
+        let sessionDTOs = sessions.map { SessionDTO($0, now: now) }
         let catchCount = sessionDTOs.reduce(0) { $0 + $1.catches.count }
+        let eventCount = sessionDTOs.reduce(0) { $0 + $1.events.count }
+        let segmentCount = sessionDTOs.reduce(0) { $0 + $1.coverageSegments.count }
 
         return ExportSnapshot(
             exportSchemaVersion: exportSchemaVersion,
@@ -52,6 +56,8 @@ enum ExportService {
             exportedAt: now,
             sessionCount: sessionDTOs.count,
             catchCount: catchCount,
+            eventCount: eventCount,
+            segmentCount: segmentCount,
             spotCount: spots.count,
             speciesCount: species.count,
             spots: spots.map(SpotDTO.init),
@@ -83,6 +89,8 @@ struct ExportSnapshot: Codable {
     let exportedAt: Date
     let sessionCount: Int
     let catchCount: Int
+    let eventCount: Int
+    let segmentCount: Int
     let spotCount: Int
     let speciesCount: Int
     let spots: [SpotDTO]
@@ -157,9 +165,14 @@ struct SessionDTO: Codable {
     let solunarMinors: [IntervalDTO]
     let conditionsFetchedAt: Date?
 
+    let currentSetup: Setup
+    let currentSubSpot: String
+    let events: [SessionEventDTO]
+    let coverageSegments: [CoverageSegmentDTO]
+
     let catches: [CatchDTO]
 
-    init(_ session: Session) {
+    init(_ session: Session, now: Date = .now) {
         id = session.id
         startedAt = session.startedAt
         endedAt = session.endedAt
@@ -193,9 +206,65 @@ struct SessionDTO: Codable {
         solunarMinors = session.solunarMinors.map(IntervalDTO.init)
         conditionsFetchedAt = session.conditionsFetchedAt
 
+        currentSetup = session.currentSetup
+        currentSubSpot = session.currentSubSpot
+        events = session.events
+            .sorted { $0.timestamp < $1.timestamp }
+            .map(SessionEventDTO.init)
+        coverageSegments = CoverageDerivation.segments(for: session, now: now)
+            .map(CoverageSegmentDTO.init)
+
         catches = session.catches
             .sorted { $0.timestamp < $1.timestamp }
             .map(CatchDTO.init)
+    }
+}
+
+struct SessionEventDTO: Codable {
+    let id: UUID
+    let timestamp: Date
+    let kind: String
+    let setup: Setup?
+    let subSpot: String?
+    let outcome: String?
+    let detail: String?
+    let latitude: Double?
+    let longitude: Double?
+
+    init(_ event: SessionEvent) {
+        id = event.id
+        timestamp = event.timestamp
+        kind = event.kindRaw
+        setup = event.setupSnapshot
+        subSpot = event.subSpot
+        outcome = event.outcomeRaw
+        detail = event.detail
+        latitude = event.latitude
+        longitude = event.longitude
+    }
+}
+
+struct CoverageSegmentDTO: Codable {
+    let start: Date
+    let end: Date
+    let durationSeconds: Double
+    let setup: Setup
+    let subSpot: String
+    let outcome: String
+    let catchCount: Int
+    let biteCount: Int
+    let catchIds: [UUID]
+
+    init(_ segment: CoverageSegment) {
+        start = segment.start
+        end = segment.end
+        durationSeconds = segment.durationSeconds
+        setup = segment.setup
+        subSpot = segment.subSpot
+        outcome = segment.outcome.rawValue
+        catchCount = segment.catchCount
+        biteCount = segment.biteCount
+        catchIds = segment.catchIds
     }
 }
 
@@ -212,6 +281,8 @@ struct CatchDTO: Codable {
     let rodUsed: String
     let caughtBy: String
     let notes: String
+    let setup: Setup?
+    let subSpot: String?
     let media: [MediaDTO]
 
     init(_ entry: Catch) {
@@ -227,6 +298,8 @@ struct CatchDTO: Codable {
         rodUsed = entry.rodUsed
         caughtBy = entry.caughtBy
         notes = entry.notes
+        setup = entry.setupSnapshot
+        subSpot = entry.subSpotSnapshot
         media = entry.media
             .sorted { $0.createdAt < $1.createdAt }
             .map(MediaDTO.init)

@@ -12,7 +12,7 @@ struct FishLoggerApp: App {
             let container: ModelContainer
             do {
                 container = try ModelContainer(
-                    for: Catch.self, Species.self, Spot.self, Session.self, MediaAsset.self
+                    for: Catch.self, Species.self, Spot.self, Session.self, MediaAsset.self, SessionEvent.self
                 )
             } catch {
                 // Schema migration failed. Since FishLogger is a single-user
@@ -21,7 +21,7 @@ struct FishLoggerApp: App {
                 Self.log.error("ModelContainer init failed, resetting store: \(error.localizedDescription, privacy: .public)")
                 Self.wipeDefaultStore()
                 container = try ModelContainer(
-                    for: Catch.self, Species.self, Spot.self, Session.self, MediaAsset.self
+                    for: Catch.self, Species.self, Spot.self, Session.self, MediaAsset.self, SessionEvent.self
                 )
             }
             self.modelContainer = container

@@ -16,6 +16,23 @@ final class Session {
     @Relationship(deleteRule: .cascade, inverse: \Catch.session)
     var catches: [Catch] = []
 
+    @Relationship(deleteRule: .cascade, inverse: \SessionEvent.session)
+    var events: [SessionEvent] = []
+
+    // MARK: Live setup (mutated during an active session)
+
+    /// JSON-encoded live setup. Use `currentSetup` for the typed view.
+    var currentSetupJSON: String?
+    /// Current micro-location within the spot ("by the dam").
+    var currentSubSpot: String = ""
+
+    /// What the angler is fishing with right now. Snapshotted onto each catch
+    /// and each `.setupChange` event.
+    var currentSetup: Setup {
+        get { Setup(jsonString: currentSetupJSON) ?? Setup() }
+        set { currentSetupJSON = newValue.jsonString }
+    }
+
     // MARK: Conditions (populated by ConditionsBackfillService)
 
     var airTempC: Double?

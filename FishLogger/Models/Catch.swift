@@ -15,6 +15,19 @@ final class Catch {
     var caughtBy: String = ""
     var notes: String
 
+    /// Snapshot of the session's `currentSetup` at this catch's timestamp,
+    /// JSON-encoded. `rodUsed`/`baitUsed` are also kept (mirrored from the
+    /// setup) for AutocompleteService and existing rows/DTOs.
+    var setupSnapshotJSON: String?
+    /// Snapshot of the session's `currentSubSpot` at this catch's timestamp.
+    var subSpotSnapshot: String?
+
+    /// Typed view over the stored JSON setup snapshot.
+    var setupSnapshot: Setup? {
+        get { Setup(jsonString: setupSnapshotJSON) }
+        set { setupSnapshotJSON = newValue?.jsonString }
+    }
+
     var species: Species?
     var session: Session?
 

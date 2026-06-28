@@ -415,6 +415,7 @@ struct AddCatchSheet: View {
             species: species,
             session: matchedSession
         )
+        SessionEventLogger.stampSetup(on: newCatch, from: matchedSession)
         context.insert(newCatch)
 
         for item in form.pickedMedia {
