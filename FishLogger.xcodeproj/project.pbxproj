@@ -23,6 +23,10 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXBuildFile section */
+		FE0000000000000000000A03 /* RealtimeAPI in Frameworks */ = {isa = PBXBuildFile; productRef = FE0000000000000000000A02 /* RealtimeAPI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		B018393C2F93914300C70409 /* FishLogger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FishLogger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B01839492F93914500C70409 /* FishLoggerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FishLoggerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FE0000000000000000000A03 /* RealtimeAPI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = FishLogger;
 			packageProductDependencies = (
+				FE0000000000000000000A02 /* RealtimeAPI */,
 			);
 			productName = FishLogger;
 			productReference = B018393C2F93914300C70409 /* FishLogger.app */;
@@ -194,6 +200,9 @@
 				Base,
 			);
 			mainGroup = B01839332F93914300C70409;
+			packageReferences = (
+				FE0000000000000000000A01 /* XCLocalSwiftPackageReference \"swift-realtime-openai\" */,
+			);
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B018393D2F93914300C70409 /* Products */;
@@ -385,7 +394,6 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
-				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -420,6 +428,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -590,6 +599,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+/* Begin XCLocalSwiftPackageReference section */
+		FE0000000000000000000A01 /* XCLocalSwiftPackageReference "swift-realtime-openai" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../swift-realtime-openai";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FE0000000000000000000A02 /* RealtimeAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RealtimeAPI;
+		};
+/* End XCSwiftPackageProductDependency section */
+
 	};
 	rootObject = B01839342F93914300C70409 /* Project object */;
 }

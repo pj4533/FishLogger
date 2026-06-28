@@ -9,6 +9,7 @@ struct SessionListView: View {
     @State private var showingAddCatch = false
     @State private var exportFile: ShareableFile?
     @State private var exportError: String?
+    @State private var showingSettings = false
 
     var body: some View {
         Group {
@@ -37,6 +38,14 @@ struct SessionListView: View {
         .navigationTitle("Sessions")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showingSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .foregroundStyle(Color.sunset)
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button {
@@ -70,6 +79,9 @@ struct SessionListView: View {
         }
         .sheet(item: $exportFile) { file in
             ShareSheet(items: [file.url])
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
         }
         .alert("Export failed", isPresented: .constant(exportError != nil)) {
             Button("OK") { exportError = nil }
