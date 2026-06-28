@@ -25,6 +25,7 @@ final class AssistantService {
 
     private(set) var phase: Phase = .idle
     private(set) var lastTranscript: String?
+    private(set) var lastAssistantReply: String?
     private(set) var recentToolEvents: [AssistantToolEvent] = []
     private(set) var isUserSpeaking = false
     private(set) var isModelSpeaking = false
@@ -60,6 +61,7 @@ final class AssistantService {
         self.context = context
         self.species = species
         lastTranscript = nil
+        lastAssistantReply = nil
         isUserSpeaking = false
         isModelSpeaking = false
 
@@ -124,6 +126,8 @@ final class AssistantService {
             lastTranscript = text
         case .assistantTranscript:
             break
+        case let .assistantReply(text):
+            lastAssistantReply = text
         case let .audioDelta(data):
             audio.enqueue(data)
         case let .userSpeakingChanged(speaking):

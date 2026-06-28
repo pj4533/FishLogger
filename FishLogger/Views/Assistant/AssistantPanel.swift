@@ -60,7 +60,13 @@ struct AssistantPanel: View {
                         Text(statusText)
                             .font(.cozyBody.weight(.medium))
                             .foregroundStyle(Color.ink)
-                        if let transcript = assistant.lastTranscript, assistant.isActive {
+                        if let reply = assistant.lastAssistantReply, assistant.isActive {
+                            Text(reply)
+                                .font(.cozyCaption.italic())
+                                .foregroundStyle(Color.sunset)
+                                .lineLimit(3)
+                                .accessibilityIdentifier("assistantReply")
+                        } else if let transcript = assistant.lastTranscript, assistant.isActive {
                             Text("“\(transcript)”")
                                 .font(.cozyCaption)
                                 .foregroundStyle(Color.inkFaded)

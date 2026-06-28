@@ -28,6 +28,7 @@ final class RealtimeClient {
         case connected
         case userTranscript(String)
         case assistantTranscript(String)
+        case assistantReply(String)          // the model's finished spoken reply
         case audioDelta(Data)                 // PCM16 24 kHz mono
         case userSpeakingChanged(Bool)
         case assistantSpeakingChanged(Bool)
@@ -185,6 +186,11 @@ final class RealtimeClient {
 
         case "response.output_audio_transcript.delta":
             if let d = obj["delta"] as? String { onEvent?(.assistantTranscript(d)) }
+
+        case "response.output_audio_transcript.done", "response.output_text.done":
+            if let t = obj["transcript"] as? String ?? obj["text"] as? String, !t.isEmpty {
+                onEvent?(.assistantReply(t))
+            }
 
         case "response.output_audio.delta":
             if !assistantSpeaking { assistantSpeaking = true; onEvent?(.assistantSpeakingChanged(true)) }
