@@ -16,10 +16,12 @@ struct AssistantPanel: View {
     #if DEBUG
     private struct DebugPhrase { let id = UUID(); let tool: String; let text: String }
     private static let debugPhrases: [DebugPhrase] = [
+        .init(tool: "set_angler", text: "It's just me fishing today, I'm PJ."),
         .init(tool: "update_setup", text: "Switching to a black hollow body frog, fishing topwater."),
         .init(tool: "set_sub_spot", text: "I'm fishing over by the dam now."),
         .init(tool: "log_bite", text: "Had a big blowup on the frog but I missed him."),
         .init(tool: "log_catch", text: "Just landed a three and a half pound largemouth bass."),
+        .init(tool: "log_catch+caughtBy", text: "Dave just landed a four pound largemouth."),
         .init(tool: "add_note", text: "Make a note that the water is really muddy today."),
         .init(tool: "end_session", text: "Alright, I'm all done fishing for the day.")
     ]
