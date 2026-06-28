@@ -68,6 +68,19 @@ struct AssistantPanel: View {
                     Divider()
                     heardFeed
                 }
+
+                #if DEBUG
+                Divider()
+                Button {
+                    assistant.debugRunCannedSequence(session: session, context: context, species: species)
+                } label: {
+                    Label("Simulate tool calls (debug)", systemImage: "ladybug.fill")
+                        .font(.cozyCaption)
+                        .foregroundStyle(Color.inkFaded)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("debugSimulateToolCalls")
+                #endif
             }
         }
         .sheet(isPresented: $showingSettings) { SettingsView() }

@@ -1,11 +1,11 @@
 import Foundation
 import SwiftData
-import RealtimeAPI
 
-/// The tool schema the Realtime model is given, plus the dispatch that turns a
-/// model tool call into SwiftData mutations via `SessionEventLogger`. The
-/// dispatch core is factored out (`dispatch(name:argsJSON:session:context:)`)
-/// so it can be unit-tested without a live `Conversation`.
+/// The tool schema the Realtime model is given (as plain JSON for the
+/// `session.update` event), plus the dispatch that turns a model tool call into
+/// SwiftData mutations via `SessionEventLogger`. The dispatch core is factored
+/// out (`dispatch(name:argsJSON:session:context:)`) so it can be unit-tested
+/// without a live connection.
 @MainActor
 enum AssistantTools {
 
@@ -24,64 +24,53 @@ enum AssistantTools {
 
     // MARK: - Schema
 
-    /// Optional params must be expressed as nullable unions: `JSONSchema.object`
-    /// forces every property to be `required`, so the model always sends the
-    /// key but may pass `null` for fields it isn't changing.
-    private static func nullableString(_ description: String) -> JSONSchema {
-        .anyOf([.string(description: description), .null()], description: description)
-    }
+    /// The tool definitions sent in `session.update.session.tools`, as plain
+    /// JSON objects. With the raw API we use ordinary JSON Schema — optional
+    /// params are simply omitted from `required` (no nullable-union hack needed).
+    static func tools() -> [[String: Any]] {
+        func fn(_ name: String, _ description: String, properties: [String: Any], required: [String]) -> [String: Any] {
+            ["type": "function", "name": name, "description": description,
+             "parameters": ["type": "object", "properties": properties, "required": required]]
+        }
+        func str(_ description: String) -> [String: Any] { ["type": "string", "description": description] }
 
-    static func tools() -> [Tool] {
-        [
-            .function(.init(
-                name: "update_setup",
-                description: "Update what the angler is fishing with right now. Only set the fields that changed (e.g. 'switching to a frog' sets only lure). Pass null for anything unchanged.",
-                parameters: .object(properties: [
-                    "rod": nullableString("Rod, e.g. 'baitcaster' or 'Ugly Stik 6'6\"'"),
-                    "reel": nullableString("Reel"),
-                    "line": nullableString("Line type/weight, e.g. '15lb braid'"),
-                    "lure": nullableString("Lure or bait, e.g. 'hollow body frog', 'whopper plopper', 'nightcrawler'"),
-                    "color": nullableString("Color/pattern, e.g. 'chartreuse', 'black/blue'"),
-                    "technique": nullableString("Technique/presentation, e.g. 'topwater', 'flipping', 'slow roll'")
-                ], description: "Incremental update to the current setup.")
-            )),
-            .function(.init(
-                name: "set_sub_spot",
-                description: "Record where on the spot the angler is now fishing, e.g. 'by the dam', 'the lily pads on the north bank'.",
-                parameters: .object(properties: [
-                    "location": .string(description: "Free-text micro-location within the spot.")
-                ], description: "Set the current sub-spot.")
-            )),
-            .function(.init(
-                name: "log_bite",
-                description: "Record a bite or missed fish — a blowup, short strike, follow, or a fish that bit but wasn't landed. Use this for action that did NOT result in a landed catch.",
-                parameters: .object(properties: [
-                    "kind": .enum(cases: ["bite", "missed", "blowup", "follow"], description: "bite = bit but not landed; missed = missed hookset; blowup = topwater explosion no hookup; follow = followed but didn't commit."),
-                    "notes": nullableString("Optional detail.")
-                ], description: "Log a bite/missed-fish event.")
-            )),
-            .function(.init(
-                name: "log_catch",
-                description: "Record a landed fish. Weight is in pounds. Match the species to one of the app's known species when possible.",
-                parameters: .object(properties: [
-                    "species": nullableString("Species common name, e.g. 'Largemouth Bass'."),
-                    "weight": .anyOf([.number(description: "Weight in pounds."), .null()], description: "Weight in pounds, or null if unknown."),
-                    "isMeasured": .anyOf([.boolean(description: "True if weighed/measured, false if estimated."), .null()], description: "Whether the weight was measured."),
-                    "notes": nullableString("Optional detail.")
-                ], description: "Log a landed catch.")
-            )),
-            .function(.init(
-                name: "add_note",
-                description: "Record a general free-text note about the session.",
-                parameters: .object(properties: [
-                    "text": .string(description: "The note text.")
-                ], description: "Add a note.")
-            )),
-            .function(.init(
-                name: "end_session",
-                description: "End the current fishing session. This finalizes the timeline so no-catch coverage can be derived.",
-                parameters: .object(properties: [:], description: "End the session.")
-            ))
+        return [
+            fn("update_setup",
+               "Update what the angler is fishing with right now. Only include the fields that changed (e.g. 'switching to a frog' sets only lure).",
+               properties: [
+                   "rod": str("Rod, e.g. 'baitcaster' or 'Ugly Stik 6'6\"'"),
+                   "reel": str("Reel"),
+                   "line": str("Line type/weight, e.g. '15lb braid'"),
+                   "lure": str("Lure or bait, e.g. 'hollow body frog', 'whopper plopper', 'nightcrawler'"),
+                   "color": str("Color/pattern, e.g. 'chartreuse', 'black/blue'"),
+                   "technique": str("Technique/presentation, e.g. 'topwater', 'flipping', 'slow roll'")
+               ], required: []),
+            fn("set_sub_spot",
+               "Record where on the spot the angler is now fishing, e.g. 'by the dam', 'the lily pads on the north bank'.",
+               properties: ["location": str("Free-text micro-location within the spot.")],
+               required: ["location"]),
+            fn("log_bite",
+               "Record a bite or missed fish — a blowup, short strike, follow, or a fish that bit but wasn't landed. Use this for action that did NOT result in a landed catch.",
+               properties: [
+                   "kind": ["type": "string", "enum": ["bite", "missed", "blowup", "follow"],
+                            "description": "bite = bit but not landed; missed = missed hookset; blowup = topwater explosion no hookup; follow = followed but didn't commit."],
+                   "notes": str("Optional detail.")
+               ], required: ["kind"]),
+            fn("log_catch",
+               "Record a landed fish. Weight is in pounds. Match the species to one of the app's known species when possible.",
+               properties: [
+                   "species": str("Species common name, e.g. 'Largemouth Bass'."),
+                   "weight": ["type": "number", "description": "Weight in pounds."],
+                   "isMeasured": ["type": "boolean", "description": "True if weighed/measured, false if estimated."],
+                   "notes": str("Optional detail.")
+               ], required: []),
+            fn("add_note",
+               "Record a general free-text note about the session.",
+               properties: ["text": str("The note text.")],
+               required: ["text"]),
+            fn("end_session",
+               "End the current fishing session. This finalizes the timeline so no-catch coverage can be derived.",
+               properties: [:], required: [])
         ]
     }
 

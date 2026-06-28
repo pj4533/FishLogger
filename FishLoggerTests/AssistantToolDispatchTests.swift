@@ -118,20 +118,30 @@ struct AssistantToolDispatchTests {
     }
 
     @Test
-    func toolSchemaEncodesNullableOptionalsAndRequiredKeys() throws {
-        // The model must always receive every key (object forces required), with
-        // optional params expressed as nullable unions.
+    func toolSchemaIsValidFunctionJSON() throws {
         let tools = AssistantTools.tools()
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(tools)
-        let json = String(data: data, encoding: .utf8) ?? ""
-        #expect(json.contains("update_setup"))
-        #expect(json.contains("log_catch"))
-        // additionalProperties:false is emitted for object schemas.
-        #expect(json.contains("additionalProperties"))
-        // A nullable union serializes an anyOf with a null branch.
-        #expect(json.contains("anyOf"))
-        #expect(json.contains("\"null\""))
         #expect(tools.count == 6)
+
+        // Each tool is a function with a name and an object-typed parameters schema.
+        for tool in tools {
+            #expect(tool["type"] as? String == "function")
+            #expect((tool["name"] as? String)?.isEmpty == false)
+            let params = try #require(tool["parameters"] as? [String: Any])
+            #expect(params["type"] as? String == "object")
+            #expect(params["properties"] is [String: Any])
+            #expect(params["required"] is [String])
+        }
+
+        let byName = Dictionary(uniqueKeysWithValues: tools.map { ($0["name"] as! String, $0) })
+        // Optional params are simply absent from `required` (no nullable-union hack).
+        let updateReq = ((byName["update_setup"]!["parameters"] as! [String: Any])["required"] as! [String])
+        #expect(updateReq.isEmpty)
+        // Required params are listed.
+        let subReq = ((byName["set_sub_spot"]!["parameters"] as! [String: Any])["required"] as! [String])
+        #expect(subReq == ["location"])
+
+        // The whole thing serializes to JSON (what we send in session.update).
+        #expect(JSONSerialization.isValidJSONObject(["tools": tools]))
+        _ = try JSONSerialization.data(withJSONObject: ["tools": tools])
     }
 }

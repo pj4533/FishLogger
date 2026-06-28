@@ -1,7 +1,6 @@
 import Foundation
 import SwiftData
 import OSLog
-import RealtimeAPI
 
 /// A single entry the UI shows in the live "HEARD" feed.
 struct AssistantToolEvent: Identifiable {
@@ -12,8 +11,8 @@ struct AssistantToolEvent: Identifiable {
 }
 
 /// Drives the hands-free voice assistant: connects to the OpenAI Realtime API
-/// over WebRTC (gpt-realtime-mini), streams mic audio, plays responses, and
-/// routes the model's tool calls to SwiftData mutations via `AssistantTools`.
+/// over a plain WebSocket (gpt-realtime-2), streams mic audio, plays responses,
+/// and routes the model's tool calls to SwiftData mutations via `AssistantTools`.
 @MainActor
 @Observable
 final class AssistantService {
@@ -27,17 +26,17 @@ final class AssistantService {
     private(set) var phase: Phase = .idle
     private(set) var lastTranscript: String?
     private(set) var recentToolEvents: [AssistantToolEvent] = []
+    private(set) var isUserSpeaking = false
+    private(set) var isModelSpeaking = false
 
-    var isActive: Bool { conversation != nil }
-    var isUserSpeaking: Bool { conversation?.isUserSpeaking ?? false }
-    var isModelSpeaking: Bool { conversation?.isModelSpeaking ?? false }
+    var isActive: Bool { client != nil }
 
     var muted: Bool = false {
-        didSet { conversation?.muted = muted }
+        didSet { audio.isMuted = muted }
     }
 
-    private var conversation: Conversation?
-    private var tasks: [Task<Void, Never>] = []
+    private var client: RealtimeClient?
+    private let audio = RealtimeAudioEngine()
     private weak var session: Session?
     private var context: ModelContext?
     private var species: [Species] = []
@@ -52,11 +51,13 @@ final class AssistantService {
     // MARK: - Lifecycle
 
     func start(session: Session, context: ModelContext, species: [Species]) async {
-        guard conversation == nil else { return }
+        guard client == nil else { return }
         self.session = session
         self.context = context
         self.species = species
         lastTranscript = nil
+        isUserSpeaking = false
+        isModelSpeaking = false
 
         guard let key = await keychain.getApiKey(), !key.trimmingCharacters(in: .whitespaces).isEmpty else {
             phase = .error("Add your OpenAI API key in Settings to use the assistant.")
@@ -65,63 +66,67 @@ final class AssistantService {
 
         phase = .connecting
 
-        let convo = Conversation(configuring: { [species] config in
-            config.tools = AssistantTools.tools()
-            config.toolChoice = .auto
-            config.instructions = AssistantInstructions.instructions(for: session, species: species)
-            config.audio.input.turnDetection = .semanticVad()
-            config.audio.input.transcription = .init(model: .gpt4oMini)
-        })
-        conversation = convo
+        let instructions = AssistantInstructions.instructions(for: session, species: species)
+        let client = RealtimeClient()
+        client.onEvent = { [weak self] event in self?.handle(event) }
+        client.connect(apiKey: key, instructions: instructions, tools: AssistantTools.tools())
+        self.client = client
         muted = false
 
+        guard let sink = client.makeAudioSink() else {
+            phase = .error("Couldn't open the audio connection.")
+            stop()
+            return
+        }
         do {
-            try await convo.connect(ephemeralKey: key, model: .custom("gpt-realtime-mini"))
-            phase = .listening
-            startLoops(convo)
+            try await audio.start(sink: sink)
+        } catch RealtimeAudioEngine.AudioError.micPermissionDenied {
+            phase = .error("Microphone access is off. Enable it in Settings.")
+            stop()
         } catch {
-            log.error("Assistant connect failed: \(String(describing: error), privacy: .public)")
-            phase = .error(friendlyMessage(for: error))
-            conversation = nil
+            log.error("Audio start failed: \(String(describing: error), privacy: .public)")
+            phase = .error("Couldn't start the microphone.")
+            stop()
         }
     }
 
     func stop() {
-        tasks.forEach { $0.cancel() }
-        tasks.removeAll()
-        conversation = nil
-        phase = .idle
+        audio.stop()
+        client?.disconnect()
+        client = nil
+        isUserSpeaking = false
+        isModelSpeaking = false
+        if case .error = phase {} else { phase = .idle }
     }
 
-    // MARK: - Event loops
+    // MARK: - Event handling
 
-    private func startLoops(_ convo: Conversation) {
-        tasks.append(Task { [weak self] in
-            for await call in convo.functionCalls {
-                guard let self else { break }
-                await self.handle(call, convo: convo)
-            }
-        })
-        tasks.append(Task { [weak self] in
-            for await error in convo.errors {
-                guard let self else { break }
-                self.log.error("Realtime error: \(error.message, privacy: .public)")
-                self.phase = .error(error.message)
-            }
-        })
-        // Surface the user's last transcript for the UI as it arrives.
-        tasks.append(Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(400))
-                guard let self, let convo = self.conversation else { break }
-                if let t = convo.messages.last(where: { $0.role == .user })?.content.last?.text, !t.isEmpty {
-                    self.lastTranscript = t
-                }
-            }
-        })
+    private func handle(_ event: RealtimeClient.Event) {
+        switch event {
+        case .connected:
+            if case .error = phase {} else { phase = .listening }
+        case let .userTranscript(text):
+            lastTranscript = text
+        case .assistantTranscript:
+            break
+        case let .audioDelta(data):
+            audio.enqueue(data)
+        case let .userSpeakingChanged(speaking):
+            isUserSpeaking = speaking
+        case let .assistantSpeakingChanged(speaking):
+            isModelSpeaking = speaking
+        case let .functionCall(call):
+            handleFunctionCall(call)
+        case let .failed(message):
+            phase = .error(message)
+        case .closed:
+            if case .error = phase {} else { phase = .idle }
+            audio.stop()
+            client = nil
+        }
     }
 
-    private func handle(_ call: Item.FunctionCall, convo: Conversation) async {
+    private func handleFunctionCall(_ call: RealtimeClient.FunctionCall) {
         guard let session, let context else { return }
 
         let result = AssistantTools.dispatch(
@@ -136,26 +141,27 @@ final class AssistantService {
         recentToolEvents.append(AssistantToolEvent(summary: result.summary, ok: result.ok, timestamp: .now))
         if recentToolEvents.count > 30 { recentToolEvents.removeFirst(recentToolEvents.count - 30) }
 
-        // Return the result so the model can speak a confirmation.
-        do {
-            try convo.send(result: .init(id: UUID().uuidString, callId: call.callId, output: result.outputJSON))
-            // Refresh instructions so the model's context stays current.
-            try convo.updateSession { [species] config in
-                config.instructions = AssistantInstructions.instructions(for: session, species: species)
-            }
-            try convo.send(event: .createResponse())
-        } catch {
-            log.error("Assistant reply failed: \(String(describing: error), privacy: .public)")
-        }
+        client?.sendFunctionResult(callId: call.callId, output: result.outputJSON)
+        client?.updateInstructions(AssistantInstructions.instructions(for: session, species: species))
     }
 
-    private func friendlyMessage(for error: Error) -> String {
-        if let convoError = error as? ConversationError {
-            switch convoError {
-            case .invalidEphemeralKey: return "That API key was rejected. Check it in Settings."
-            default: break
-            }
+    #if DEBUG
+    /// Test hook: run a canned sequence of tool calls through the full dispatch
+    /// + save + feed path without a live connection, to verify the data flow in
+    /// the simulator (where we can't actually speak).
+    func debugRunCannedSequence(session: Session, context: ModelContext, species: [Species]) {
+        self.session = session
+        self.context = context
+        self.species = species
+        let calls: [(String, String)] = [
+            ("update_setup", #"{"lure":"hollow body frog","color":"black","technique":"topwater"}"#),
+            ("set_sub_spot", #"{"location":"by the dam"}"#),
+            ("log_bite", #"{"kind":"blowup","notes":"huge blowup, missed him"}"#),
+            ("log_catch", #"{"species":"Largemouth Bass","weight":3.4,"isMeasured":true}"#)
+        ]
+        for (name, args) in calls {
+            handleFunctionCall(RealtimeClient.FunctionCall(callId: "debug", name: name, arguments: args))
         }
-        return "Couldn't connect. Check your network and API key."
     }
+    #endif
 }
