@@ -18,6 +18,13 @@ struct AssistantToolDispatchTests {
         return s
     }
 
+    /// A complete setup — every field set, which is what catches/bites now
+    /// require. Tests that don't care about the specific gear use this.
+    private func completeSetup(rod: String = "baitcaster", lure: String = "frog") -> Setup {
+        Setup(rod: rod, reel: "200 series", line: "30lb braid",
+              lure: lure, color: "black", technique: "topwater")
+    }
+
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
 
     @Test
@@ -60,7 +67,7 @@ struct AssistantToolDispatchTests {
         let (container, context) = try makeContext()
         _ = container
         let session = makeSession(context)
-        session.currentSetup = Setup(lure: "frog")
+        session.currentSetup = completeSetup()
         let r = AssistantTools.dispatch(name: "log_bite",
             argsJSON: #"{"kind":"missed","notes":"big blowup"}"#, session: session, context: context, now: now)
         #expect(r.ok)
@@ -77,7 +84,8 @@ struct AssistantToolDispatchTests {
         let bass = Species(commonName: "Largemouth Bass", scientificName: "Micropterus salmoides")
         context.insert(bass)
         let session = makeSession(context)
-        session.currentSetup = Setup(rod: "baitcaster", lure: "frog")
+        session.currentSetup = completeSetup(rod: "baitcaster", lure: "frog")
+        session.currentAngler = "PJ"
         session.currentSubSpot = "by the dam"
 
         let r = AssistantTools.dispatch(name: "log_catch",
@@ -100,6 +108,7 @@ struct AssistantToolDispatchTests {
         _ = container
         context.insert(Species(commonName: "Largemouth Bass", scientificName: "Micropterus salmoides"))
         let session = makeSession(context)
+        session.currentSetup = completeSetup()
 
         let r = AssistantTools.dispatch(name: "set_angler", argsJSON: #"{"name":"PJ"}"#, session: session, context: context, now: now)
         #expect(r.ok)
@@ -117,6 +126,7 @@ struct AssistantToolDispatchTests {
         _ = container
         context.insert(Species(commonName: "Largemouth Bass", scientificName: "Micropterus salmoides"))
         let session = makeSession(context)
+        session.currentSetup = completeSetup()
         session.currentAngler = "PJ"
 
         let r = AssistantTools.dispatch(name: "log_catch",
@@ -124,6 +134,90 @@ struct AssistantToolDispatchTests {
             session: session, context: context, now: now)
         #expect(r.ok)
         #expect(session.catches.first?.caughtBy == "Dave")
+    }
+
+    // MARK: - Required-data enforcement
+
+    @Test
+    func logCatchRejectedWhenSetupIncomplete() throws {
+        let (container, context) = try makeContext()
+        _ = container
+        context.insert(Species(commonName: "Largemouth Bass", scientificName: "Micropterus salmoides"))
+        let session = makeSession(context)
+        session.currentAngler = "PJ"
+        session.currentSetup = Setup(rod: "baitcaster", lure: "frog")  // missing reel/line/color/technique
+
+        let r = AssistantTools.dispatch(name: "log_catch",
+            argsJSON: #"{"species":"largemouth","weight":3.0}"#,
+            session: session, context: context, now: now)
+        #expect(!r.ok)
+        #expect(r.summary.contains("reel"))
+        #expect(r.summary.contains("line"))
+        #expect(r.summary.contains("color"))
+        #expect(r.summary.contains("technique"))
+        #expect(session.catches.isEmpty)   // nothing logged
+    }
+
+    @Test
+    func logCatchRejectedWhenAnglerMissing() throws {
+        let (container, context) = try makeContext()
+        _ = container
+        context.insert(Species(commonName: "Largemouth Bass", scientificName: "Micropterus salmoides"))
+        let session = makeSession(context)
+        session.currentSetup = completeSetup()   // setup complete, but no angler and no caughtBy
+
+        let r = AssistantTools.dispatch(name: "log_catch",
+            argsJSON: #"{"species":"largemouth","weight":3.0}"#,
+            session: session, context: context, now: now)
+        #expect(!r.ok)
+        #expect(r.summary.localizedCaseInsensitiveContains("who"))
+        #expect(session.catches.isEmpty)
+    }
+
+    @Test
+    func logCatchAcceptedWithCaughtByEvenWithoutSessionAngler() throws {
+        let (container, context) = try makeContext()
+        _ = container
+        context.insert(Species(commonName: "Largemouth Bass", scientificName: "Micropterus salmoides"))
+        let session = makeSession(context)
+        session.currentSetup = completeSetup()   // no currentAngler, but caughtBy names someone
+
+        let r = AssistantTools.dispatch(name: "log_catch",
+            argsJSON: #"{"species":"largemouth","weight":3.0,"caughtBy":"Dave"}"#,
+            session: session, context: context, now: now)
+        #expect(r.ok)
+        #expect(session.catches.first?.caughtBy == "Dave")
+    }
+
+    @Test
+    func logCatchRejectedWhenSpeciesUnknown() throws {
+        let (container, context) = try makeContext()
+        _ = container
+        context.insert(Species(commonName: "Largemouth Bass", scientificName: "Micropterus salmoides"))
+        let session = makeSession(context)
+        session.currentSetup = completeSetup()
+        session.currentAngler = "PJ"
+
+        let r = AssistantTools.dispatch(name: "log_catch",
+            argsJSON: #"{"species":"unicornfish","weight":3.0}"#,
+            session: session, context: context, now: now)
+        #expect(!r.ok)
+        #expect(r.summary.localizedCaseInsensitiveContains("species"))
+        #expect(session.catches.isEmpty)
+    }
+
+    @Test
+    func logBiteRejectedWhenSetupIncomplete() throws {
+        let (container, context) = try makeContext()
+        _ = container
+        let session = makeSession(context)
+        session.currentSetup = Setup(lure: "frog")   // only lure
+
+        let r = AssistantTools.dispatch(name: "log_bite",
+            argsJSON: #"{"kind":"missed"}"#, session: session, context: context, now: now)
+        #expect(!r.ok)
+        #expect(r.summary.contains("rod"))
+        #expect(session.events.contains { $0.kind == .bite } == false)
     }
 
     @Test

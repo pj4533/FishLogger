@@ -36,7 +36,7 @@ enum AssistantTools {
 
         return [
             fn("update_setup",
-               "Update what the angler is fishing with right now. Only include the fields that changed (e.g. 'switching to a frog' sets only lure).",
+               "Update what the angler is fishing with right now. Only include the fields that changed (e.g. 'switching to a frog' sets only lure). A COMPLETE setup (all six fields) is required before any catch or bite can be logged.",
                properties: [
                    "rod": str("Rod, e.g. 'baitcaster' or 'Ugly Stik 6'6\"'"),
                    "reel": str("Reel"),
@@ -54,19 +54,19 @@ enum AssistantTools {
                properties: ["name": str("The angler's name.")],
                required: ["name"]),
             fn("log_bite",
-               "Record a bite or missed fish — a blowup, short strike, follow, or a fish that bit but wasn't landed. Use this for action that did NOT result in a landed catch.",
+               "Record a bite or missed fish — a blowup, short strike, follow, or a fish that bit but wasn't landed. Use this for action that did NOT result in a landed catch. Requires a COMPLETE setup first (rod, reel, line, lure, color, technique); rejected with the missing fields otherwise.",
                properties: [
                    "kind": ["type": "string", "enum": ["bite", "missed", "blowup", "follow"],
                             "description": "bite = bit but not landed; missed = missed hookset; blowup = topwater explosion no hookup; follow = followed but didn't commit."],
                    "notes": str("Optional detail.")
                ], required: ["kind"]),
             fn("log_catch",
-               "Record a landed fish. Weight is in pounds. Match the species to one of the app's known species when possible.",
+               "Record a landed fish. REQUIRED before this succeeds: a known species, a COMPLETE setup (rod, reel, line, lure, color, technique — set via update_setup), and who caught it (set_angler, or the caughtBy field). Weight (in pounds) is the ONLY optional field. If anything is missing the call is REJECTED with the list of missing fields — ask the angler for them, then call again.",
                properties: [
-                   "species": str("Species common name, e.g. 'Largemouth Bass'."),
-                   "weight": ["type": "number", "description": "Weight in pounds."],
+                   "species": str("Species common name, e.g. 'Largemouth Bass'. Must match one of the app's known species."),
+                   "weight": ["type": "number", "description": "Weight in pounds (optional — omit if not weighed)."],
                    "isMeasured": ["type": "boolean", "description": "True if weighed/measured, false if estimated."],
-                   "caughtBy": str("Who caught it, if named (e.g. 'Dave'). Omit to credit the current angler."),
+                   "caughtBy": str("Who caught it, if named (e.g. 'Dave'). Omit to credit the current angler (who must already be set)."),
                    "notes": str("Optional detail.")
                ], required: []),
             fn("add_note",
@@ -104,6 +104,10 @@ enum AssistantTools {
             return Result(ok: true, summary: SessionEventLogger.changeSubSpot(location, on: session, at: now, context: context))
 
         case "log_bite":
+            let missing = missingSetupFields(session.currentSetup)
+            if !missing.isEmpty {
+                return Result(ok: false, summary: "Can't log that yet — still need the setup: \(missing.joined(separator: ", ")). Ask the angler, then log the bite.")
+            }
             let outcome = BiteOutcome(rawValue: (str(args["kind"]) ?? "bite").lowercased()) ?? .bite
             return Result(ok: true, summary: SessionEventLogger.logBite(outcome, detail: str(args["notes"]), on: session, at: now, context: context))
 
@@ -114,11 +118,31 @@ enum AssistantTools {
         case "log_catch":
             let speciesName = str(args["species"])
             let species = matchSpecies(speciesName, context: context)
+            let caughtBy = str(args["caughtBy"]) ?? ""
+
+            // Enforce complete data — the model can't skip the follow-ups. Weight
+            // is the only optional field; everything else must be present.
+            var missing: [String] = []
+            if species == nil {
+                if let name = speciesName, !name.isEmpty {
+                    missing.append("species (didn't recognize “\(name)” — which species is it?)")
+                } else {
+                    missing.append("species")
+                }
+            }
+            missing.append(contentsOf: missingSetupFields(session.currentSetup))
+            if caughtBy.isEmpty && session.currentAngler.isEmpty {
+                missing.append("who caught it")
+            }
+            if !missing.isEmpty {
+                return Result(ok: false, summary: "Can't log the catch yet — still need: \(missing.joined(separator: ", ")). Ask the angler for these, then call log_catch again.")
+            }
+
             let weight = num(args["weight"]) ?? 0
             let entry = Catch(
                 timestamp: now, latitude: session.latitude, longitude: session.longitude,
                 weight: weight, isMeasured: bool(args["isMeasured"]) ?? false,
-                caughtBy: str(args["caughtBy"]) ?? "",
+                caughtBy: caughtBy,
                 notes: str(args["notes"]) ?? "", species: species, session: session
             )
             SessionEventLogger.stampSetup(on: entry, from: session)   // defaults caughtBy to the session angler if blank
@@ -142,6 +166,21 @@ enum AssistantTools {
         default:
             return Result(ok: false, summary: "Unknown tool \(name)")
         }
+    }
+
+    /// Setup fields still missing — every field is required before a catch or
+    /// bite can be logged. Returned in form order so the spoken follow-up reads
+    /// naturally. Shared with `AssistantInstructions` so the prompt context and
+    /// the enforcement agree on what's required.
+    static func missingSetupFields(_ s: Setup) -> [String] {
+        var m: [String] = []
+        if s.rod == nil       { m.append("rod") }
+        if s.reel == nil      { m.append("reel") }
+        if s.line == nil      { m.append("line") }
+        if s.lure == nil      { m.append("lure") }
+        if s.color == nil     { m.append("color") }
+        if s.technique == nil { m.append("technique") }
+        return m
     }
 
     // Lenient coercion helpers (models sometimes send numbers as strings, etc.).

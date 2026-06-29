@@ -32,6 +32,8 @@ final class RealtimeClient {
         case audioDelta(Data)                 // PCM16 24 kHz mono
         case userSpeakingChanged(Bool)
         case assistantSpeakingChanged(Bool)
+        case responseStarted                  // server opened a response
+        case responseFinished                 // server completed a response
         case functionCall(FunctionCall)
         case failed(String)
         case closed
@@ -122,17 +124,6 @@ final class RealtimeClient {
         }
     }
 
-    #if DEBUG
-    /// Test hook: inject a text user turn and request a response, to exercise
-    /// the live model + tool calling without a microphone.
-    func sendTextTurn(_ text: String) {
-        send(["type": "conversation.item.create",
-              "item": ["type": "message", "role": "user",
-                       "content": [["type": "input_text", "text": text]]]])
-        send(["type": "response.create"])
-    }
-    #endif
-
     private func send(_ object: [String: Any]) {
         guard let task,
               let data = try? JSONSerialization.data(withJSONObject: object),
@@ -198,8 +189,15 @@ final class RealtimeClient {
                 onEvent?(.audioDelta(audio))
             }
 
-        case "response.output_audio.done", "response.done":
+        case "response.created":
+            onEvent?(.responseStarted)
+
+        case "response.output_audio.done":
             if assistantSpeaking { assistantSpeaking = false; onEvent?(.assistantSpeakingChanged(false)) }
+
+        case "response.done":
+            if assistantSpeaking { assistantSpeaking = false; onEvent?(.assistantSpeakingChanged(false)) }
+            onEvent?(.responseFinished)
 
         case "response.function_call_arguments.done":
             if let callId = obj["call_id"] as? String,

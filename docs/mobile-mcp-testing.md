@@ -186,15 +186,23 @@ timeout 12 xcrun simctl launch --console-pty $DEV com.saygoodnight.FishLogger
 
 ## What FishLogger gives you for testing
 
-- The `AssistantPanel` (visible on **ongoing** sessions) has, under `#if DEBUG`:
-  - **"Connect text‑only (no mic, debug)"** (`debugConnectTextOnly`) — connect to the
-    live model with **no microphone**. Always use this in the sim; a live sim mic
-    picks up the Mac's room audio and the model reacts to it.
-  - One **"send live phrase"** button per tool (`dbg_set_angler`, `dbg_update_setup`,
-    `dbg_set_sub_spot`, `dbg_log_bite`, `dbg_log_catch`, `dbg_log_catch+caughtBy`,
-    `dbg_add_note`, `dbg_end_session`) — injects a canned user turn over the live
-    connection. This is how the tools are exercised without speaking.
-  - **"Simulate tool calls (offline debug)"** — runs canned dispatch with no network.
+> **The in‑app assistant debug harness was REMOVED** (it was shipping in Debug
+> builds onto the physical device). There are no longer `debugConnectTextOnly`,
+> `dbg_*` "send live phrase", or "Simulate tool calls" buttons in `AssistantPanel`.
+> If you need that harness again to drive the live model from the sim, re‑add it
+> **gated on `#if targetEnvironment(simulator)`** (not `#if DEBUG`) so it can never
+> reach a device build, and wire it back to `AssistantService` / `RealtimeClient`.
+> See git history (the assistant single‑round / required‑data work) for the exact
+> removed code.
+
+How to test the assistant **now**:
+- **Tool dispatch + required‑data enforcement:** covered by `AssistantToolDispatchTests`
+  (unit tests) — the authoritative check that catches/bites are rejected without a
+  complete setup + species + angler. Run those, don't eyeball the UI.
+- **Live model behavior (asks follow‑ups, snark, tool calls):** needs a real spoken
+  turn on a **device** (the sim mic hears the Mac's room), or a temporarily re‑added
+  simulator‑only harness as above.
+
 - Many controls have **accessibility identifiers** — prefer matching on `identifier`
   in the element list over guessing coordinates.
 

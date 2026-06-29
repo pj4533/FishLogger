@@ -197,8 +197,17 @@ started); without the guard, scheduling a buffer on an unstarted player node cra
 realtime events to dispatch + persistence + the HEARD feed, and refreshes the
 instructions after every state‑changing tool (so the model always has fresh
 context). Exposes `lastTranscript` (what you said) and `lastAssistantReply` (what
-it said). `#if DEBUG` it has `debugConnectTextOnly` (connect with **no mic**) and
-canned/text‑turn hooks — see "text‑only debug path" below.
+it said). Tapping Talk is a **single round**: it captures one exchange and
+auto‑disconnects once something is successfully logged and the spoken confirmation
+finishes (tracked via per‑turn `turnHadSuccessfulTool` / `turnHadRejectedTool` flags
+and `RealtimeAudioEngine.notifyWhenDrained`). A clarifying question — e.g. a catch
+rejected for missing data — keeps the mic open so you can answer.
+
+> **Removed:** the `#if DEBUG` assistant harness (`debugConnectTextOnly`, the
+> `debugSendTextTurn` / `debugRunCannedSequence` hooks, and `RealtimeClient.sendTextTurn`)
+> was deleted — it was shipping into Debug device builds. The references to a
+> "text‑only debug path" elsewhere in this doc are historical. To test the live
+> model from the sim again, re‑add a harness gated on `#if targetEnvironment(simulator)`.
 
 ### `AssistantTools` — 7 tools
 

@@ -26,6 +26,12 @@ final class RealtimeAudioEngine {
     nonisolated(unsafe) private var sink: (@Sendable (Data) -> Void)?
     nonisolated(unsafe) private var muted = false
 
+    /// Buffers scheduled on the player but not yet finished playing. Drives
+    /// `notifyWhenDrained`, which lets the caller wait for the spoken reply to
+    /// finish before tearing the engine down (so we don't clip the audio).
+    private var scheduledBufferCount = 0
+    private var drainCompletion: (() -> Void)?
+
     private let log = Logger.assistant
 
     var isMuted: Bool {
@@ -70,13 +76,26 @@ final class RealtimeAudioEngine {
         engine.stop()
         sink = nil
         captureConverter = nil
+        scheduledBufferCount = 0
+        drainCompletion = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    }
+
+    /// Calls `completion` once every buffer scheduled so far has finished
+    /// playing — or immediately if nothing is queued. Used to wait for the
+    /// assistant's spoken reply to finish before disconnecting.
+    func notifyWhenDrained(_ completion: @escaping () -> Void) {
+        if scheduledBufferCount == 0 {
+            completion()
+        } else {
+            drainCompletion = completion
+        }
     }
 
     /// Schedules a PCM16 (24 kHz mono) chunk from the server for playback.
     func enqueue(_ pcm16: Data) {
-        // Ignore audio that arrives before/after the engine is running (e.g. the
-        // text-only debug path never starts capture/playback).
+        // Ignore audio that arrives before the engine is running or after it's
+        // been torn down.
         guard engine.isRunning, player.engine != nil, !pcm16.isEmpty else { return }
         let frameCount = pcm16.count / 2
         guard frameCount > 0,
@@ -90,7 +109,20 @@ final class RealtimeAudioEngine {
                 out[i] = Float(Int16(littleEndian: samples[i])) / 32_768.0
             }
         }
-        player.scheduleBuffer(buffer, completionHandler: nil)
+        scheduledBufferCount += 1
+        player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            Task { @MainActor in self?.bufferPlayedBack() }
+        }
+    }
+
+    /// A scheduled buffer finished playing; fire the drain completion once the
+    /// queue is empty. Runs on the main actor (hopped from the audio thread).
+    private func bufferPlayedBack() {
+        if scheduledBufferCount > 0 { scheduledBufferCount -= 1 }
+        if scheduledBufferCount == 0, let completion = drainCompletion {
+            drainCompletion = nil
+            completion()
+        }
     }
 
     // MARK: - Capture (audio thread)

@@ -13,20 +13,6 @@ struct AssistantPanel: View {
     @State private var assistant = AssistantService()
     @State private var showingSettings = false
 
-    #if DEBUG
-    private struct DebugPhrase { let id = UUID(); let tool: String; let text: String }
-    private static let debugPhrases: [DebugPhrase] = [
-        .init(tool: "set_angler", text: "It's just me fishing today, I'm PJ."),
-        .init(tool: "update_setup", text: "Switching to a black hollow body frog, fishing topwater."),
-        .init(tool: "set_sub_spot", text: "I'm fishing over by the dam now."),
-        .init(tool: "log_bite", text: "Had a big blowup on the frog but I missed him."),
-        .init(tool: "log_catch", text: "Just landed a three and a half pound largemouth bass."),
-        .init(tool: "log_catch+caughtBy", text: "Dave just landed a four pound largemouth."),
-        .init(tool: "add_note", text: "Make a note that the water is really muddy today."),
-        .init(tool: "end_session", text: "Alright, I'm all done fishing for the day.")
-    ]
-    #endif
-
     var body: some View {
         CozyCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -60,7 +46,9 @@ struct AssistantPanel: View {
                         Text(statusText)
                             .font(.cozyBody.weight(.medium))
                             .foregroundStyle(Color.ink)
-                        if let reply = assistant.lastAssistantReply, assistant.isActive {
+                        if let reply = assistant.lastAssistantReply {
+                            // Stays visible after a single round ends so the
+                            // angler can read the confirmation, not just hear it.
                             Text(reply)
                                 .font(.cozyCaption.italic())
                                 .foregroundStyle(Color.sunset)
@@ -88,46 +76,6 @@ struct AssistantPanel: View {
                     Divider()
                     heardFeed
                 }
-
-                #if DEBUG
-                Divider()
-                if assistant.isActive {
-                    Text("DEBUG: SEND LIVE PHRASE")
-                        .font(.fieldLabel)
-                        .foregroundStyle(Color.inkFaded)
-                    ForEach(Self.debugPhrases, id: \.id) { phrase in
-                        Button {
-                            assistant.debugSendTextTurn(phrase.text)
-                        } label: {
-                            Label("\(phrase.tool): “\(phrase.text)”", systemImage: "text.bubble.fill")
-                                .font(.cozyCaption)
-                                .foregroundStyle(Color.sunset)
-                                .multilineTextAlignment(.leading)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("dbg_\(phrase.tool)")
-                    }
-                } else {
-                    Button {
-                        Task { await assistant.debugConnectTextOnly(session: session, context: context, species: species) }
-                    } label: {
-                        Label("Connect text-only (no mic, debug)", systemImage: "keyboard")
-                            .font(.cozyCaption)
-                            .foregroundStyle(Color.sunset)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("debugConnectTextOnly")
-                    Button {
-                        assistant.debugRunCannedSequence(session: session, context: context, species: species)
-                    } label: {
-                        Label("Simulate tool calls (offline debug)", systemImage: "ladybug.fill")
-                            .font(.cozyCaption)
-                            .foregroundStyle(Color.inkFaded)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("debugSimulateToolCalls")
-                }
-                #endif
             }
         }
         .sheet(isPresented: $showingSettings) { SettingsView() }

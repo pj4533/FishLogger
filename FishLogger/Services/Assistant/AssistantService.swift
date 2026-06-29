@@ -42,6 +42,20 @@ final class AssistantService {
     private var context: ModelContext?
     private var species: [Species] = []
 
+    // Single-round state: tapping Talk captures one exchange, then disconnects
+    // (rather than looping back to listening). We end the round once the turn is
+    // fully resolved *and* something was actually recorded — a clarifying
+    // question with no tool call keeps the mic open so the angler can answer.
+    private var singleRound = false
+    private var openResponseCount = 0
+    private var pendingToolResponses = 0
+    // Per-turn record (reset each time the angler starts a new utterance): did a
+    // tool succeed, and did one get rejected for missing data? The round only
+    // ends when something was logged AND nothing was rejected — a rejection
+    // means a clarifying follow-up is coming, so we keep the mic open.
+    private var turnHadSuccessfulTool = false
+    private var turnHadRejectedTool = false
+
     private let keychain: KeychainManaging
     private let log = Logger.assistant
 
@@ -52,10 +66,6 @@ final class AssistantService {
     // MARK: - Lifecycle
 
     func start(session: Session, context: ModelContext, species: [Species]) async {
-        await connect(session: session, context: context, species: species, captureAudio: true)
-    }
-
-    private func connect(session: Session, context: ModelContext, species: [Species], captureAudio: Bool) async {
         guard client == nil else { return }
         self.session = session
         self.context = context
@@ -64,6 +74,12 @@ final class AssistantService {
         lastAssistantReply = nil
         isUserSpeaking = false
         isModelSpeaking = false
+        // Tapping Talk captures a single exchange, then disconnects.
+        singleRound = true
+        openResponseCount = 0
+        pendingToolResponses = 0
+        turnHadSuccessfulTool = false
+        turnHadRejectedTool = false
 
         guard let key = await keychain.getApiKey(), !key.trimmingCharacters(in: .whitespaces).isEmpty else {
             phase = .error("Add your OpenAI API key in Settings to use the assistant.")
@@ -78,8 +94,6 @@ final class AssistantService {
         client.connect(apiKey: key, instructions: instructions, tools: AssistantTools.tools())
         self.client = client
         muted = false
-
-        guard captureAudio else { return }   // text-only debug path skips the mic
 
         guard let sink = client.makeAudioSink() else {
             phase = .error("Couldn't open the audio connection.")
@@ -97,15 +111,6 @@ final class AssistantService {
             stop()
         }
     }
-
-    #if DEBUG
-    /// Connects WITHOUT starting the microphone — for deterministic text-turn
-    /// testing in the simulator, where the Mac mic otherwise feeds ambient audio
-    /// to the live model.
-    func debugConnectTextOnly(session: Session, context: ModelContext, species: [Species]) async {
-        await connect(session: session, context: context, species: species, captureAudio: false)
-    }
-    #endif
 
     func stop() {
         audio.stop()
@@ -132,8 +137,16 @@ final class AssistantService {
             audio.enqueue(data)
         case let .userSpeakingChanged(speaking):
             isUserSpeaking = speaking
+            // A new utterance begins a fresh turn — clear the per-turn record.
+            if speaking { turnHadSuccessfulTool = false; turnHadRejectedTool = false }
         case let .assistantSpeakingChanged(speaking):
             isModelSpeaking = speaking
+        case .responseStarted:
+            openResponseCount += 1
+            if pendingToolResponses > 0 { pendingToolResponses -= 1 }
+        case .responseFinished:
+            if openResponseCount > 0 { openResponseCount -= 1 }
+            endRoundIfComplete()
         case let .functionCall(call):
             handleFunctionCall(call)
         case let .failed(message):
@@ -153,8 +166,13 @@ final class AssistantService {
             session: session, context: context
         )
         if result.ok {
+            turnHadSuccessfulTool = true
             do { try context.save() }
             catch { log.error("Assistant save failed: \(String(describing: error), privacy: .public)") }
+        } else {
+            // A rejected call (e.g. a catch missing required data) means the
+            // model is about to ask a follow-up — keep the round open.
+            turnHadRejectedTool = true
         }
 
         recentToolEvents.append(AssistantToolEvent(summary: result.summary, ok: result.ok, timestamp: .now))
@@ -162,32 +180,25 @@ final class AssistantService {
 
         client?.sendFunctionResult(callId: call.callId, output: result.outputJSON)
         client?.updateInstructions(AssistantInstructions.instructions(for: session, species: species))
+        // sendFunctionResult asks the model to speak a confirmation — a new
+        // response is coming, so don't end the round on the function-call
+        // response's completion.
+        pendingToolResponses += 1
     }
 
-    #if DEBUG
-    /// Test hook: send a text turn over the LIVE connection so the real model
-    /// processes it and (hopefully) calls a tool — verifies the end-to-end
-    /// network + model + dispatch path without a microphone.
-    func debugSendTextTurn(_ text: String) {
-        client?.sendTextTurn(text)
+    /// In single-round mode, end the exchange once every open response has
+    /// finished, no tool-triggered confirmation is still pending, something was
+    /// successfully logged this turn, and nothing was rejected (a rejection
+    /// means a follow-up question is coming, so we stay listening). We drain the
+    /// audio first so the spoken confirmation finishes playing before we
+    /// disconnect.
+    private func endRoundIfComplete() {
+        guard singleRound,
+              turnHadSuccessfulTool,
+              !turnHadRejectedTool,
+              openResponseCount == 0,
+              pendingToolResponses == 0 else { return }
+        singleRound = false   // don't fire twice while audio drains
+        audio.notifyWhenDrained { [weak self] in self?.stop() }
     }
-
-    /// Test hook: run a canned sequence of tool calls through the full dispatch
-    /// + save + feed path without a live connection, to verify the data flow in
-    /// the simulator (where we can't actually speak).
-    func debugRunCannedSequence(session: Session, context: ModelContext, species: [Species]) {
-        self.session = session
-        self.context = context
-        self.species = species
-        let calls: [(String, String)] = [
-            ("update_setup", #"{"lure":"hollow body frog","color":"black","technique":"topwater"}"#),
-            ("set_sub_spot", #"{"location":"by the dam"}"#),
-            ("log_bite", #"{"kind":"blowup","notes":"huge blowup, missed him"}"#),
-            ("log_catch", #"{"species":"Largemouth Bass","weight":3.4,"isMeasured":true}"#)
-        ]
-        for (name, args) in calls {
-            handleFunctionCall(RealtimeClient.FunctionCall(callId: "debug", name: name, arguments: args))
-        }
-    }
-    #endif
 }
