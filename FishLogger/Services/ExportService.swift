@@ -60,8 +60,8 @@ enum ExportService {
             segmentCount: segmentCount,
             spotCount: spots.count,
             speciesCount: species.count,
-            spots: spots.map(SpotDTO.init),
-            species: species.map(SpeciesDTO.init),
+            spots: spots.map { SpotDTO($0) },
+            species: species.map { SpeciesDTO($0) },
             sessions: sessionDTOs
         )
     }
@@ -203,8 +203,8 @@ struct SessionDTO: Codable {
         sunsetAt = session.sunsetAt
         moonPhase = session.moonPhase
         moonIllumination = session.moonIllumination
-        solunarMajors = session.solunarMajors.map(IntervalDTO.init)
-        solunarMinors = session.solunarMinors.map(IntervalDTO.init)
+        solunarMajors = session.solunarMajors.map { IntervalDTO($0) }
+        solunarMinors = session.solunarMinors.map { IntervalDTO($0) }
         conditionsFetchedAt = session.conditionsFetchedAt
 
         currentSetup = session.currentSetup
@@ -212,13 +212,13 @@ struct SessionDTO: Codable {
         currentAngler = session.currentAngler
         events = session.events
             .sorted { $0.timestamp < $1.timestamp }
-            .map(SessionEventDTO.init)
+            .map { SessionEventDTO($0) }
         coverageSegments = CoverageDerivation.segments(for: session, now: now)
-            .map(CoverageSegmentDTO.init)
+            .map { CoverageSegmentDTO($0) }
 
         catches = session.catches
             .sorted { $0.timestamp < $1.timestamp }
-            .map(CatchDTO.init)
+            .map { CatchDTO($0) }
     }
 }
 
@@ -304,7 +304,7 @@ struct CatchDTO: Codable {
         subSpot = entry.subSpotSnapshot
         media = entry.media
             .sorted { $0.createdAt < $1.createdAt }
-            .map(MediaDTO.init)
+            .map { MediaDTO($0) }
     }
 }
 

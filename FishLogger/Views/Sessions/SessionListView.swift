@@ -193,15 +193,17 @@ private struct SessionRow: View {
                         }
                     }
                     if let big = biggestCatch, let s = big.species {
+                        let weightText: AttributedString = {
+                            var a = AttributedString(String(format: "%.1f lb", big.weight))
+                            a.font = .cozyCaption.weight(.semibold)
+                            return a
+                        }()
                         HStack(spacing: 6) {
                             Image(systemName: "trophy.fill")
                                 .font(.caption)
                                 .foregroundStyle(Color.sunset)
-                            Text("\(s.commonName) · ")
+                            Text("\(s.commonName) · \(weightText)")
                                 .font(.cozyCaption)
-                                .foregroundStyle(Color.ink)
-                            + Text(String(format: "%.1f lb", big.weight))
-                                .font(.cozyCaption.weight(.semibold))
                                 .foregroundStyle(Color.ink)
                         }
                     }

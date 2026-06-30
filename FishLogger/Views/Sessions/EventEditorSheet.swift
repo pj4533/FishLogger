@@ -117,7 +117,7 @@ struct EventEditorSheet: View {
         CozyCard {
             VStack(alignment: .leading, spacing: 12) {
                 Text("SETUP").font(.fieldLabel).foregroundStyle(Color.inkFaded)
-                labeledField("ROD", $rod, suggestions: rodSuggestions, icon: "fishingrod")
+                labeledField("ROD", $rod, suggestions: rodSuggestions, icon: "figure.fishing")
                 labeledField("REEL", $reel, icon: "circle.circle")
                 labeledField("LINE", $line, icon: "scribble")
                 labeledField("LURE / BAIT", $lure, suggestions: baitSuggestions, icon: "ladybug.fill")

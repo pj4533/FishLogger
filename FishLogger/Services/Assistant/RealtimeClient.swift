@@ -140,8 +140,8 @@ final class RealtimeClient {
         guard let task,
               let data = try? JSONSerialization.data(withJSONObject: object),
               let text = String(data: data, encoding: .utf8) else { return }
-        task.send(.string(text)) { [weak self] error in
-            if let error { Task { @MainActor in self?.log.error("WS send error: \(error.localizedDescription, privacy: .public)") } }
+        task.send(.string(text)) { [log] error in
+            if let error { log.error("WS send error: \(error.localizedDescription, privacy: .public)") }
         }
     }
 

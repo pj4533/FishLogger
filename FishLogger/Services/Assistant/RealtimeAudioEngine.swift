@@ -1,5 +1,5 @@
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
 import OSLog
 
 /// Captures microphone audio as PCM16 mono @ 24 kHz for the Realtime API and
@@ -47,7 +47,7 @@ final class RealtimeAudioEngine {
 
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.playAndRecord, mode: .voiceChat,
-                                     options: [.defaultToSpeaker, .allowBluetooth])
+                                     options: [.defaultToSpeaker, .allowBluetoothHFP])
         try audioSession.setActive(true)
 
         engine.attach(player)
@@ -131,7 +131,8 @@ final class RealtimeAudioEngine {
         }
         scheduledBufferCount += 1
         player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-            Task { @MainActor in self?.bufferPlayedBack() }
+            guard let self else { return }
+            Task { @MainActor in self.bufferPlayedBack() }
         }
     }
 

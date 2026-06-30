@@ -298,7 +298,7 @@ struct CatchDetailView: View {
                         label: "Rod",
                         text: $entry.rodUsed,
                         suggestions: rodSuggestions,
-                        icon: "fishingrod"
+                        icon: "figure.fishing"
                     )
                 } else {
                     HStack {
@@ -307,7 +307,7 @@ struct CatchDetailView: View {
                     }
                     StatRow(label: "WHO",  value: entry.caughtBy.isEmpty ? "—" : entry.caughtBy, icon: "person.fill")
                     StatRow(label: "BAIT", value: entry.baitUsed.isEmpty ? "—" : entry.baitUsed, icon: "ladybug.fill")
-                    StatRow(label: "ROD",  value: entry.rodUsed.isEmpty  ? "—" : entry.rodUsed,  icon: "fishingrod")
+                    StatRow(label: "ROD",  value: entry.rodUsed.isEmpty  ? "—" : entry.rodUsed,  icon: "figure.fishing")
                     if let spot = entry.spot {
                         StatRow(label: "SPOT", value: spot.name, icon: "mappin.and.ellipse")
                     }

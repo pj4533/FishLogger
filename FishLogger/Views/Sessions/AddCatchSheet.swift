@@ -76,6 +76,7 @@ struct AddCatchSheet: View {
                     .font(.fieldLabel)
                     .foregroundStyle(Color.inkFaded)
 
+                let selectedCount = form.pickedMedia.count
                 PhotosPicker(
                     selection: $form.pickedMedia,
                     maxSelectionCount: 6,
@@ -83,7 +84,7 @@ struct AddCatchSheet: View {
                 ) {
                     HStack {
                         Image(systemName: "camera.fill")
-                        Text(form.pickedMedia.isEmpty ? "Add photos or video" : "\(form.pickedMedia.count) selected")
+                        Text(selectedCount == 0 ? "Add photos or video" : "\(selectedCount) selected")
                             .font(.cozyBody)
                     }
                     .foregroundStyle(Color.ink)
@@ -240,7 +241,7 @@ struct AddCatchSheet: View {
                     label: "e.g. Ugly Stik 6'6",
                     text: $form.rodUsed,
                     suggestions: rodSuggestions,
-                    icon: "fishingrod"
+                    icon: "figure.fishing"
                 )
             }
         }

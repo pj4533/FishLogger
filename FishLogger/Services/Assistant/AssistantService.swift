@@ -61,8 +61,8 @@ final class AssistantService {
     private let keychain: KeychainManaging
     private let log = Logger.assistant
 
-    init(keychain: KeychainManaging = KeychainManager.shared) {
-        self.keychain = keychain
+    init(keychain: KeychainManaging? = nil) {
+        self.keychain = keychain ?? KeychainManager.shared
     }
 
     // MARK: - Lifecycle

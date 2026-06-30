@@ -122,28 +122,27 @@ private struct SuggestionRow: View {
         .buttonStyle(SuggestionRowStyle())
     }
 
-    @ViewBuilder
     private var highlightedText: some View {
+        Text(highlightedAttributedString)
+    }
+
+    /// The suggestion with the matched query run shown bold/sunset, built as an
+    /// `AttributedString` (iOS 26 deprecated concatenating styled `Text` with `+`).
+    private var highlightedAttributedString: AttributedString {
         let q = highlightQuery.trimmingCharacters(in: .whitespaces)
-        if !q.isEmpty,
-           let range = suggestion.range(of: q, options: .caseInsensitive) {
-            let before = suggestion[suggestion.startIndex..<range.lowerBound]
-            let hit    = suggestion[range]
-            let after  = suggestion[range.upperBound..<suggestion.endIndex]
-            (Text(String(before))
-                .font(.cozyBody)
-                .foregroundColor(Color.ink)
-             + Text(String(hit))
-                .font(.cozyBody.weight(.semibold))
-                .foregroundColor(Color.sunset)
-             + Text(String(after))
-                .font(.cozyBody)
-                .foregroundColor(Color.ink))
-        } else {
-            Text(suggestion)
-                .font(.cozyBody)
-                .foregroundStyle(Color.ink)
+        func run(_ text: Substring, weight: Font.Weight, color: Color) -> AttributedString {
+            var a = AttributedString(String(text))
+            a.font = .cozyBody.weight(weight)
+            a.foregroundColor = color
+            return a
         }
+        guard !q.isEmpty,
+              let range = suggestion.range(of: q, options: .caseInsensitive) else {
+            return run(Substring(suggestion), weight: .regular, color: .ink)
+        }
+        return run(suggestion[suggestion.startIndex..<range.lowerBound], weight: .regular, color: .ink)
+            + run(suggestion[range], weight: .semibold, color: .sunset)
+            + run(suggestion[range.upperBound..<suggestion.endIndex], weight: .regular, color: .ink)
     }
 }
 

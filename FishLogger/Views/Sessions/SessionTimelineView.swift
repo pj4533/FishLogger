@@ -49,7 +49,7 @@ struct SessionTimelineView: View {
             Spacer()
             Menu {
                 Button { editor = EditorPresentation(mode: .add(.setupChange)) } label: {
-                    Label("Setup change", systemImage: "fishingrod")
+                    Label("Setup change", systemImage: "figure.fishing")
                 }
                 Button { editor = EditorPresentation(mode: .add(.subSpotChange)) } label: {
                     Label("Sub-spot", systemImage: "mappin")
@@ -227,7 +227,7 @@ private struct TimelineRow: View {
         switch item {
         case let .event(e):
             switch e.kind {
-            case .setupChange:   return "fishingrod"
+            case .setupChange:   return "figure.fishing"
             case .subSpotChange: return "mappin"
             case .bite:          return "drop.triangle"
             case .note:          return "text.quote"
