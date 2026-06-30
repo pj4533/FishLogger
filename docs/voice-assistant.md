@@ -448,6 +448,43 @@ keeps working. The changes compose additively, so an even‑older store opens to
 
 ---
 
+## 8a. The editable timeline (manual parity with the assistant)
+
+The session detail screen is **sub‑tabbed** (`Overview / Timeline`,
+`SessionDetailView.DetailTab`). The **Timeline** tab (`Views/Sessions/SessionTimelineView.swift`)
+is the visible, fully‑editable home for `SessionEvent`: it merges every event
+(setup change, sub‑spot, bite, note) **and** every `Catch` into one chronological
+list on a single vertical "fishing line", ascending by time. Catches keep their own
+node (the heaviest on the line) and still push into `CatchDetailView`; events open
+`EventEditorSheet`.
+
+`EventEditorSheet` (`Views/Sessions/EventEditorSheet.swift`) is the manual counterpart
+to the assistant's tools — add/edit/delete a setup change, sub‑spot, bite, or note by
+hand, each with its own time. The "Add to timeline" menu also routes Catch →
+`AddCatchSheet`. This gives full parity: `update_setup`, `set_sub_spot`, `log_bite`,
+`add_note`, `log_catch` all have a manual path. `set_angler` is **not** a timeline item
+(no event backing) — it's edited as the **Angler** field in the Overview edit block.
+`end_session` stays in the toolbar menu. The old separate Catches card was removed —
+catches now live only in the timeline.
+
+### The load‑bearing consistency rule
+
+`CoverageDerivation` treats the `.setupChange` / `.subSpotChange` **event chain** as
+authoritative once any such event exists; `Session.currentSetup` / `currentSubSpot` are
+only the *latest live* values. So **any manual edit/delete of those events must
+recompute live state** — `SessionEventLogger.recomputeLiveState(for:)` sets
+`currentSetup` to the latest remaining `.setupChange` snapshot (empty if none) and
+`currentSubSpot` to the latest `.subSpotChange`. `deleteEvent(_:from:context:)` does the
+delete + recompute (excluding the just‑deleted event, since the inverse relationship may
+not have updated yet). Setup snapshots are **absolute, fully‑resolved** `Setup`s, never
+deltas — the editor prefills all six fields from the current resolved setup and stores
+the whole thing. `SessionEventLoggerTests` locks these invariants down (delete latest →
+rolls back; delete only → empties; delete middle → keeps latest; bite/note never affect
+setup). The assistant's append‑at‑`now` methods are unchanged — `currentSetup` is already
+correct there, so they don't call recompute, keeping `AssistantToolDispatchTests` green.
+
+---
+
 ## 9. Known issues / future work
 
 - **`gpt-realtime-2`** — swap the model constant once the account is granted runtime
@@ -477,6 +514,13 @@ Views/Assistant/AssistantPanel.swift
 Views/Settings/SettingsView.swift
 FishLoggerTests/{CoverageDerivationTests,AssistantToolDispatchTests,
                  AssistantServiceTests,MockKeychain}.swift
+```
+Timeline cycle (later):
+```
+Views/Sessions/{SessionTimelineView,EventEditorSheet}.swift          (new)
+Services/SessionEventLogger.swift   (recomputeLiveState, deleteEvent, public summary)
+Views/Sessions/SessionDetailView.swift   (Overview/Timeline sub-tabs; catches → timeline; angler field)
+FishLoggerTests/SessionEventLoggerTests.swift                        (new)
 ```
 Modified:
 ```

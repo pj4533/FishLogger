@@ -9,8 +9,14 @@ struct SessionDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var isEditing = false
-    @State private var showingAddCatch = false
     @State private var showDeleteConfirm = false
+    @State private var tab: DetailTab = .overview
+
+    private enum DetailTab: Hashable { case overview, timeline }
+
+    private var anglerSuggestions: [String] {
+        AutocompleteService.suggestions(for: .angler, context: context)
+    }
 
     private static let significantTimeDelta: TimeInterval = 30 * 60
     private static let significantLocationDelta: CLLocationDistance = 500
@@ -40,17 +46,15 @@ struct SessionDetailView: View {
         ScrollView {
             VStack(spacing: 16) {
                 headerBlock
-                if session.isOngoing {
-                    AssistantPanel(session: session)
+                Picker("", selection: $tab) {
+                    Text("Overview").tag(DetailTab.overview)
+                    Text("Timeline").tag(DetailTab.timeline)
                 }
-                if isEditing {
-                    editBlock
-                }
-                ConditionsSessionCard(session: session)
-                catchesBlock
-                notesBlock
-                if isEditing {
-                    dangerBlock
+                .pickerStyle(.segmented)
+
+                switch tab {
+                case .overview: overviewContent
+                case .timeline: SessionTimelineView(session: session)
                 }
             }
             .padding(.horizontal, 16)
@@ -86,9 +90,6 @@ struct SessionDetailView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingAddCatch) {
-            AddCatchSheet()
-        }
         .confirmationDialog(
             "Delete this session and all its catches?",
             isPresented: $showDeleteConfirm,
@@ -103,6 +104,21 @@ struct SessionDetailView: View {
                 dismiss()
             }
             Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    @ViewBuilder
+    private var overviewContent: some View {
+        if session.isOngoing {
+            AssistantPanel(session: session)
+        }
+        if isEditing {
+            editBlock
+        }
+        ConditionsSessionCard(session: session)
+        notesBlock
+        if isEditing {
+            dangerBlock
         }
     }
 
@@ -193,48 +209,16 @@ struct SessionDetailView: View {
                     .datePickerStyle(.compact)
                     .tint(Color.sunset)
                 }
+
+                Text("ANGLER").font(.fieldLabel).foregroundStyle(Color.inkFaded)
+                AutocompleteField(
+                    label: "Who's fishing this session?",
+                    text: $session.currentAngler,
+                    suggestions: anglerSuggestions,
+                    icon: "person.fill"
+                )
             }
         }
-    }
-
-    private var catchesBlock: some View {
-        CozyCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("CATCHES")
-                        .font(.fieldLabel)
-                        .foregroundStyle(Color.inkFaded)
-                    Spacer()
-                    Button {
-                        showingAddCatch = true
-                    } label: {
-                        Label("Add catch", systemImage: "plus.circle.fill")
-                            .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                            .foregroundStyle(Color.sunset)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if session.catches.isEmpty {
-                    Text("No catches logged yet. That's still a session — the conditions are recorded above.")
-                        .font(.cozyCaption)
-                        .foregroundStyle(Color.inkFaded)
-                        .multilineTextAlignment(.leading)
-                        .padding(.vertical, 8)
-                } else {
-                    ForEach(sortedCatches) { entry in
-                        NavigationLink(value: entry) {
-                            CatchRow(entry: entry)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
-
-    private var sortedCatches: [Catch] {
-        session.catches.sorted { $0.timestamp > $1.timestamp }
     }
 
     private var notesBlock: some View {
@@ -265,57 +249,6 @@ struct SessionDetailView: View {
         }
         .buttonStyle(.bordered)
         .tint(.red)
-    }
-}
-
-private struct CatchRow: View {
-    let entry: Catch
-
-    private var timeText: String {
-        let f = DateFormatter()
-        f.dateFormat = "h:mm a"
-        return f.string(from: entry.timestamp)
-    }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            if let photo = entry.media.first(where: { $0.kind == .photo }) {
-                AsyncImageFromURL(url: photo.url)
-                    .frame(width: 56, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            } else if let video = entry.media.first(where: { $0.kind == .video }) {
-                VideoThumbnailView(url: video.url, atSeconds: video.thumbnailTimeSeconds)
-                    .frame(width: 56, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            } else {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.waterLight.opacity(0.6))
-                    .frame(width: 56, height: 56)
-                    .overlay(FishIcon(commonName: entry.species?.commonName ?? "", size: 28))
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                if let s = entry.species {
-                    SpeciesTag(commonName: s.commonName, scientificName: s.scientificName, compact: true)
-                }
-                WeightBadge(weight: entry.weight, isMeasured: entry.isMeasured)
-                HStack(spacing: 8) {
-                    Text(timeText.uppercased())
-                        .font(.fieldLabel)
-                        .foregroundStyle(Color.inkFaded)
-                    if !entry.caughtBy.isEmpty {
-                        Label(entry.caughtBy, systemImage: "person.fill")
-                            .labelStyle(.titleAndIcon)
-                            .font(.fieldLabel)
-                            .foregroundStyle(Color.inkFaded)
-                    }
-                }
-            }
-            Spacer()
-            Image(systemName: "chevron.right")
-                .foregroundStyle(Color.inkFaded)
-        }
-        .padding(.vertical, 4)
     }
 }
 

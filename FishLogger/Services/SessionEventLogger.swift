@@ -95,6 +95,50 @@ enum SessionEventLogger {
         return trimmed.isEmpty ? "Angler cleared" : "Angler: \(trimmed)"
     }
 
+    // MARK: - Timeline editing (manual add/edit/delete)
+
+    /// Re-derives the session's live `currentSetup` / `currentSubSpot` from its
+    /// events after a manual edit or delete. `currentSetup` becomes the latest
+    /// `.setupChange` snapshot (or empty if none remain); `currentSubSpot` the
+    /// latest `.subSpotChange` value (or ""). `CoverageDerivation` treats the
+    /// event chain as authoritative once any change of a kind exists, so the live
+    /// fields must always track the most recent event of that kind.
+    static func recomputeLiveState(for session: Session) {
+        recompute(from: session.events, on: session)
+    }
+
+    /// Deletes a timeline event and recomputes live state, so deleting the most
+    /// recent setup/sub-spot change rolls `currentSetup`/`currentSubSpot` back to
+    /// the prior one. The just-deleted event is excluded from the recompute (the
+    /// inverse relationship may not have updated yet within this run loop).
+    static func deleteEvent(_ event: SessionEvent, from session: Session, context: ModelContext) {
+        let remaining = session.events.filter { $0.id != event.id }
+        context.delete(event)
+        recompute(from: remaining, on: session)
+    }
+
+    private static func recompute(from events: [SessionEvent], on session: Session) {
+        let latestSetup = events
+            .filter { $0.kind == .setupChange }
+            .max { $0.timestamp < $1.timestamp }
+        session.currentSetup = latestSetup?.setupSnapshot ?? Setup()
+
+        let latestSubSpot = events
+            .filter { $0.kind == .subSpotChange }
+            .max { $0.timestamp < $1.timestamp }
+        session.currentSubSpot = latestSubSpot?.subSpot ?? ""
+    }
+
+    /// A short human summary of a resolved setup, for timeline rows and the
+    /// assistant's confirmations. Public so the timeline UI renders it identically.
+    static func summary(of setup: Setup) -> String {
+        [setup.color, setup.lure, setup.technique]
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .nilIfEmpty
+            ?? [setup.rod, setup.reel, setup.line].compactMap { $0 }.joined(separator: " ")
+    }
+
     /// Stamps a newly created catch with the session's live setup/sub-spot,
     /// defaults `caughtBy` to the session angler, and mirrors `rod`/`lure` onto
     /// the legacy `rodUsed`/`baitUsed` fields. Call before inserting the catch.
@@ -111,14 +155,6 @@ enum SessionEventLogger {
         if entry.caughtBy.isEmpty, !session.currentAngler.isEmpty {
             entry.caughtBy = session.currentAngler
         }
-    }
-
-    private static func summary(of setup: Setup) -> String {
-        [setup.color, setup.lure, setup.technique]
-            .compactMap { $0 }
-            .joined(separator: " ")
-            .nilIfEmpty
-            ?? [setup.rod, setup.reel, setup.line].compactMap { $0 }.joined(separator: " ")
     }
 }
 
