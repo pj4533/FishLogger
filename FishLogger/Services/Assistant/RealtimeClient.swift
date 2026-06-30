@@ -85,7 +85,11 @@ final class RealtimeClient {
             "audio": [
                 "input": [
                     "format": ["type": "audio/pcm", "rate": Self.sampleRate],
-                    "turn_detection": ["type": "semantic_vad"],
+                    // Turn detection is OFF (push-to-talk). The angler taps to
+                    // start talking and taps again to send; the app commits the
+                    // buffer manually via `commitInput()`. No server-side VAD /
+                    // silence detection — it never stopped reliably outdoors.
+                    "turn_detection": NSNull(),
                     "transcription": ["model": "gpt-4o-mini-transcribe"]
                 ],
                 "output": [
@@ -101,6 +105,14 @@ final class RealtimeClient {
 
     func updateInstructions(_ instructions: String) {
         send(["type": "session.update", "session": ["type": "realtime", "instructions": instructions]])
+    }
+
+    /// Closes the current push-to-talk turn: commits the captured audio buffer
+    /// and asks the model to respond. Called when the angler taps to send (we
+    /// run with server turn detection disabled, so the turn never closes itself).
+    func commitInput() {
+        send(["type": "input_audio_buffer.commit"])
+        send(["type": "response.create"])
     }
 
     /// Returns the function-call result and asks the model to respond (speak a

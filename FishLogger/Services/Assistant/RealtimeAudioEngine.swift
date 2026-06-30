@@ -53,6 +53,30 @@ final class RealtimeAudioEngine {
         engine.attach(player)
         engine.connect(player, to: engine.mainMixerNode, format: playbackFormat)
 
+        installCaptureTap()
+
+        engine.prepare()
+        try engine.start()
+        player.play()
+    }
+
+    /// Stops sending microphone audio (removes the input tap) while keeping
+    /// playback running, so the model's spoken reply still plays. Used when the
+    /// angler taps to send: we close the mic but keep the speaker live.
+    func stopCapture() {
+        engine.inputNode.removeTap(onBus: 0)
+    }
+
+    /// Re-installs the input tap after `stopCapture()` so the angler can talk
+    /// again (e.g. to answer a clarifying question) without reconnecting.
+    func resumeCapture() {
+        guard engine.isRunning else { return }
+        installCaptureTap()
+    }
+
+    /// Installs the mic tap that converts input to PCM16 24 kHz mono and feeds
+    /// the sink. Safe to call again after `stopCapture()`.
+    private func installCaptureTap() {
         let input = engine.inputNode
         let inputFormat = input.inputFormat(forBus: 0)
         captureFormat = inputFormat
@@ -64,10 +88,6 @@ final class RealtimeAudioEngine {
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
             self?.processCapturedBuffer(buffer, target: target)
         }
-
-        engine.prepare()
-        try engine.start()
-        player.play()
     }
 
     func stop() {

@@ -34,12 +34,11 @@ struct AssistantPanel: View {
 
                 HStack(spacing: 14) {
                     TalkButton(
-                        isActive: assistant.isActive,
-                        isUserSpeaking: assistant.isUserSpeaking,
+                        isRecording: assistant.isRecording,
                         isModelSpeaking: assistant.isModelSpeaking,
-                        isConnecting: assistant.phase == .connecting
+                        isBusy: assistant.phase == .connecting || assistant.phase == .processing
                     ) {
-                        Task { await toggle() }
+                        Task { await tap() }
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
@@ -82,11 +81,16 @@ struct AssistantPanel: View {
         .onDisappear { assistant.stop() }
     }
 
-    private func toggle() async {
-        if assistant.isActive {
-            assistant.stop()
-        } else {
+    private func tap() async {
+        switch assistant.phase {
+        case .idle, .error:
             await assistant.start(session: session, context: context, species: species)
+        case .recording:
+            assistant.finishTurn()
+        case .ready:
+            assistant.resumeRecording()
+        case .connecting, .processing:
+            break   // busy — ignore taps
         }
     }
 
@@ -94,10 +98,9 @@ struct AssistantPanel: View {
         switch assistant.phase {
         case .idle:       return "Tap to talk"
         case .connecting: return "Connecting…"
-        case .listening:
-            if assistant.isModelSpeaking { return "Replying…" }
-            if assistant.isUserSpeaking { return "Listening…" }
-            return "Listening"
+        case .recording:  return "Listening — tap to send"
+        case .processing: return assistant.isModelSpeaking ? "Replying…" : "Thinking…"
+        case .ready:      return "Tap to answer"
         case .error:      return "Tap to retry"
         }
     }
@@ -145,12 +148,12 @@ struct AssistantPanel: View {
     }
 }
 
-/// Circular push-to-talk control with a listening/replying pulse.
+/// Circular push-to-talk control: tap to start talking (mic), tap again to send
+/// (stop). Pulses while recording or while the model replies.
 private struct TalkButton: View {
-    let isActive: Bool
-    let isUserSpeaking: Bool
+    let isRecording: Bool
     let isModelSpeaking: Bool
-    let isConnecting: Bool
+    let isBusy: Bool
     let action: () -> Void
 
     @State private var pulse = false
@@ -159,26 +162,27 @@ private struct TalkButton: View {
         Button(action: action) {
             ZStack {
                 Circle()
-                    .fill(isActive ? Color.sunset : Color.waterDeep)
+                    .fill(isRecording ? Color.sunset : Color.waterDeep)
                     .frame(width: 60, height: 60)
                     .overlay(
                         Circle()
                             .stroke(Color.sunset.opacity(0.5), lineWidth: 3)
-                            .scaleEffect(pulse && (isUserSpeaking || isModelSpeaking) ? 1.35 : 1.0)
-                            .opacity(pulse && (isUserSpeaking || isModelSpeaking) ? 0 : 1)
+                            .scaleEffect(pulse && (isRecording || isModelSpeaking) ? 1.35 : 1.0)
+                            .opacity(pulse && (isRecording || isModelSpeaking) ? 0 : 1)
                     )
-                if isConnecting {
+                if isBusy {
                     ProgressView().tint(Color.paper)
                 } else {
-                    Image(systemName: isActive ? "stop.fill" : "mic.fill")
+                    Image(systemName: isRecording ? "stop.fill" : "mic.fill")
                         .font(.title2)
                         .foregroundStyle(Color.paper)
                 }
             }
         }
         .buttonStyle(.plain)
-        .onChange(of: isUserSpeaking || isModelSpeaking) { _, speaking in
-            pulse = speaking
+        .disabled(isBusy)
+        .onChange(of: isRecording || isModelSpeaking) { _, active in
+            pulse = active
         }
         .animation(.easeOut(duration: 0.8).repeatForever(autoreverses: false), value: pulse)
     }

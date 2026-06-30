@@ -165,8 +165,8 @@ rejects it with `beta_api_shape_disabled`).
 `configure()` sends one `session.update` with the **GA `session.type = "realtime"`**
 shape (nested `audio.input` / `audio.output`, not the old flat beta fields):
 
-- input: `audio/pcm` @ 24 kHz, `turn_detection: semantic_vad`,
-  `transcription: gpt-4o-mini-transcribe`
+- input: `audio/pcm` @ 24 kHz, **`turn_detection: null` (push‑to‑talk, no
+  server‑side VAD)**, `transcription: gpt-4o-mini-transcribe`
 - output: `audio/pcm` @ 24 kHz, `voice: marin`, `output_modalities: ["audio"]`
 - `tools` (plain JSON dicts), `tool_choice: auto`
 
@@ -175,6 +175,12 @@ Tool round‑trip: model emits `response.function_call_arguments.done` →
 `function_call_output` **and** a `response.create`, which is what makes the model
 *speak the confirmation* (the snark). The spoken reply comes back as
 `response.output_audio_transcript.done` → surfaced in the UI as `lastAssistantReply`.
+
+**Push‑to‑talk turn control.** Server VAD is disabled (`turn_detection: null`).
+The angler taps to start talking and **taps again to send** — `commitInput()` posts
+`input_audio_buffer.commit` + `response.create`, and the mic tap is removed so we
+stop streaming audio. There is no silence/end‑of‑speech detection (it never stopped
+reliably in a noisy outdoor environment). See decision in §4.
 
 Model constant: `RealtimeClient.model = "gpt-realtime-mini"` (see decisions §4).
 
@@ -197,11 +203,16 @@ started); without the guard, scheduling a buffer on an unstarted player node cra
 realtime events to dispatch + persistence + the HEARD feed, and refreshes the
 instructions after every state‑changing tool (so the model always has fresh
 context). Exposes `lastTranscript` (what you said) and `lastAssistantReply` (what
-it said). Tapping Talk is a **single round**: it captures one exchange and
-auto‑disconnects once something is successfully logged and the spoken confirmation
-finishes (tracked via per‑turn `turnHadSuccessfulTool` / `turnHadRejectedTool` flags
-and `RealtimeAudioEngine.notifyWhenDrained`). A clarifying question — e.g. a catch
-rejected for missing data — keeps the mic open so you can answer.
+it said).
+
+`Phase`: `idle → connecting → recording → processing → ready`. Tapping Talk is a
+**single round**: it captures one push‑to‑talk exchange (`recording`, tap again to
+send → `processing`) and auto‑disconnects once something is successfully logged and
+the spoken confirmation finishes (tracked via per‑turn `turnHadSuccessfulTool` /
+`turnHadRejectedTool` flags and `RealtimeAudioEngine.notifyWhenDrained`). A
+clarifying question — e.g. a catch rejected for missing data — leaves the connection
+open in `.ready`; the angler taps to talk again (`resumeRecording()` reopens the mic
+without reconnecting) and answers.
 
 > **Removed:** the `#if DEBUG` assistant harness (`debugConnectTextOnly`, the
 > `debugSendTextTurn` / `debugRunCannedSequence` hooks, and `RealtimeClient.sendTextTurn`)
@@ -277,6 +288,17 @@ correctly, so we ship that and left a comment to swap to `gpt-realtime-2` once
 runtime access is granted. (Note: the `/v1/realtime/client_secrets` mint endpoint
 does **not** validate the model — it happily mints for a fake model — so a mint
 success proves nothing; the WebSocket `model_not_found` is the authoritative check.)
+
+### Push‑to‑talk, no silence detection
+Originally the turn ended via server‑side `semantic_vad` — the model decided when the
+angler stopped talking. **In a noisy outdoor environment this never reliably fired**,
+so the mic stayed open and nothing got sent. Replaced with explicit push‑to‑talk:
+`turn_detection: null`, the angler taps to start and taps again to send
+(`commitInput()` = `input_audio_buffer.commit` + `response.create`), and the mic tap
+is torn down on send (`RealtimeAudioEngine.stopCapture()`). A clarifying question
+reopens the mic on the same connection via `resumeRecording()`. Deliberately simple;
+if smarter endpointing is ever wanted, it goes back on the *client* side (e.g. a
+local VAD), not the server's auto‑response.
 
 ### Standing key, no backend (accepted tradeoff)
 Realtime normally wants an **ephemeral** key minted server‑side so the standing key
